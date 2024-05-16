@@ -52,11 +52,23 @@ BinauralObjectProcessorFX::~BinauralObjectProcessorFX()
 {
 }
 
-AKRESULT BinauralObjectProcessorFX::Init(AK::IAkPluginMemAlloc* in_pAllocator, AK::IAkEffectPluginContext* in_pContext, AK::IAkPluginParam* in_pParams, AkAudioFormat& in_rFormat)
+AKRESULT BinauralObjectProcessorFX::Init(
+	AK::IAkPluginMemAlloc* in_pAllocator,
+	AK::IAkEffectPluginContext* in_pContext,
+	AK::IAkPluginParam* in_pParams,
+	AkAudioFormat& in_rFormat)
 {
 	m_pParams = (BinauralObjectProcessorFXParams*)in_pParams;
 	m_pAllocator = in_pAllocator;
 	m_pContext = in_pContext;
+
+	// in_rFormat.channelConfig.eConfigType will be different than AK_ChannelConfigType_Objects if the configuration of the input of the plugin is known and does not support a 
+    // dynamic number of objects. However this plug-in is pointless if it is not instantiated on an Audio Object bus, so we are better off letting our users know.
+    if (in_rFormat.channelConfig.eConfigType != AK_ChannelConfigType_Objects)
+        return AK_UnsupportedChannelConfig;
+        
+    // Inform the host that the output will be stereo. The host will create an output object for us and pass it to Execute.
+    in_rFormat.channelConfig.SetStandard(AK_SPEAKER_SETUP_STEREO);
 
 	return AK_Success;
 }
@@ -86,54 +98,52 @@ void BinauralObjectProcessorFX::Execute(
 		const AkAudioObjects& out_objects	///< Output objects and object buffers.
 	)
 {
-	AkUInt16 uMaxFramesProcessed = 0;
-	for (AkUInt32 objIdx = 0; objIdx < in_objects.uNumObjects; ++objIdx)
-	{
-		const AkUInt32 uNumChannels = in_objects.ppObjectBuffers[objIdx]->NumChannels();
-
-		AkUInt16 uFramesProcessed;
-		for (AkUInt32 i = 0; i < uNumChannels; ++i)
-		{
-			// Peek into object metadata if desired.
-			AkAudioObject* pObject = in_objects.ppObjects[objIdx];
-			
-			AkReal32* AK_RESTRICT pBuf = (AkReal32* AK_RESTRICT)in_objects.ppObjectBuffers[objIdx]->GetChannel(i);
-
-			uFramesProcessed = 0;
-			while (uFramesProcessed < in_objects.ppObjectBuffers[objIdx]->uValidFrames)
-			{
-				// Get input object's samples
-				++uFramesProcessed;
-			}
-			if (uFramesProcessed > uMaxFramesProcessed)
-				uMaxFramesProcessed = uFramesProcessed;
-		}
-	}
-	
-	for (AkUInt32 objIdx = 0; objIdx < out_objects.uNumObjects; ++objIdx)
-	{
-		const AkUInt32 uNumChannels = out_objects.ppObjectBuffers[objIdx]->NumChannels();
-
-		AkUInt16 uFramesProcessed;
-		for (AkUInt32 i = 0; i < uNumChannels; ++i)
-		{
-			// Set output object's metadata if desired.
-			AkAudioObject* pObject = out_objects.ppObjects[objIdx];
-			
-			AkReal32* AK_RESTRICT pBuf = (AkReal32* AK_RESTRICT)out_objects.ppObjectBuffers[objIdx]->GetChannel(i);
-
-			uFramesProcessed = 0;
-			while (uFramesProcessed < out_objects.ppObjectBuffers[objIdx]->uValidFrames)
-			{
-				// Fill output object's samples
-				++uFramesProcessed;
-			}
-		}
-		
-		out_objects.ppObjectBuffers[objIdx]->uValidFrames = uMaxFramesProcessed;
-		if (uMaxFramesProcessed > 0)
-			out_objects.ppObjectBuffers[objIdx]->eState = AK_DataReady;
-		else
-			out_objects.ppObjectBuffers[objIdx]->eState = AK_NoMoreData;
-	}
+    AKASSERT(in_objects.uNumObjects > 0); // Should never be called with 0 objects if this plug-in does not force tails.
+    AKASSERT(out_objects.uNumObjects == 1); // Output config is a stereo channel stream.
+    
+    // "Binauralize" (just mix) objects in stereo output buffer.
+    // For the purpose of this demonstration, instead of applying HRTF filters, let's call the built-in service to compute panning gains.
+    
+    // The output object should be stereo. Clear its two channels.
+    AKASSERT(out_objects.ppObjectBuffers[0]->GetChannelConfig().uChannelMask == AK_SPEAKER_SETUP_STEREO);
+    memset(out_objects.ppObjectBuffers[0]->GetChannel(0), 0, out_objects.ppObjectBuffers[0]->MaxFrames() * sizeof(AkReal32));
+    memset(out_objects.ppObjectBuffers[0]->GetChannel(1), 0, out_objects.ppObjectBuffers[0]->MaxFrames() * sizeof(AkReal32));
+    
+    AKRESULT eState = AK_NoMoreData;
+    
+    for (AkUInt32 i = 0; i < in_objects.uNumObjects; ++i)
+    {
+        // State management: set the output to AK_DataReady as long as one of the inputs is AK_DataReady. Otherwise set to AK_NoMoreData.
+        if (in_objects.ppObjectBuffers[i]->eState != AK_NoMoreData)
+            eState = in_objects.ppObjectBuffers[i]->eState;
+        
+        // Prepare mixing matrix for this input.
+        const AkUInt32 uNumChannelsIn = in_objects.ppObjectBuffers[i]->NumChannels();
+        AkUInt32 uTransmixSize = AK::SpeakerVolumes::Matrix::GetRequiredSize(
+            uNumChannelsIn,
+            2);
+        AK::SpeakerVolumes::MatrixPtr mx = (AK::SpeakerVolumes::MatrixPtr)AkAllocaSIMD(uTransmixSize);
+        AK::SpeakerVolumes::Matrix::Zero(mx, uNumChannelsIn, 2);
+        
+        // Compute panning gains and fill the mixing matrix.
+        m_pContext->GetMixerCtx()->ComputePositioning(
+            in_objects.ppObjects[i]->positioning,
+            in_objects.ppObjectBuffers[i]->GetChannelConfig(),
+            out_objects.ppObjectBuffers[0]->GetChannelConfig(),
+            mx
+        );
+        
+        // Using the mixing matrix, mix the channels of the ith input object into the one and only stereo output object.
+        AK_GET_PLUGIN_SERVICE_MIXER(m_pContext->GlobalContext())->MixNinNChannels(
+            in_objects.ppObjectBuffers[i],
+            out_objects.ppObjectBuffers[0],
+            1.f,
+            1.f,
+            mx, /// NOTE: To properly interpolate from frame to frame and avoid any glitch, we would need to store the previous matrix (OR positional information) for each object.
+            mx);
+    }
+    
+    // Set the output object's state.
+    out_objects.ppObjectBuffers[0]->uValidFrames = in_objects.ppObjectBuffers[0]->MaxFrames();
+    out_objects.ppObjectBuffers[0]->eState = eState;
 }
