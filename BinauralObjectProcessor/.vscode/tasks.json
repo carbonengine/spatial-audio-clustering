@@ -1,0 +1,215 @@
+{
+	// See https://go.microsoft.com/fwlink/?LinkId=733558
+	// for the documentation about the tasks.json format
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "wp.py premake",
+			"type": "shell",
+			"windows": {
+				"command": "py"
+			},
+			"osx": {
+				"command": "python3"
+			},
+			"linux": {
+				"command": "python3"
+			},
+			"args": [
+				"${env:WWISEROOT}/Scripts/Build/Plugins/wp.py",
+				"premake",
+				"${input:platform}"
+			]
+		},
+		{
+			"label": "wp.py build",
+			"type": "shell",
+			"windows": {
+				"command": "py",
+				"args": [
+					"${env:WWISEROOT}/Scripts/Build/Plugins/wp.py",
+					"build",
+					"${input:platform}",
+					"-c",
+					"${input:config}",
+					"-x",
+					"${input:arch}",
+					"-t",
+					"${input:toolset}"
+				],
+				"problemMatcher": "$msCompile"
+			},
+			"osx": {
+				"command": "python3",
+				"args": [
+					"${env:WWISEROOT}/Scripts/Build/Plugins/wp.py",
+					"build",
+					"${input:platform}",
+					"-c",
+					"${input:config}",
+					"-x",
+					"${input:arch}"
+				]
+			},
+			"linux": {
+				"command": "python3",
+				"args": [
+					"${env:WWISEROOT}/Scripts/Build/Plugins/wp.py",
+					"build",
+					"${input:platform}",
+					"-c",
+					"${input:config}",
+					"-x",
+					"${input:arch}"
+				]
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "wp.py build Documentation",
+			"type": "shell",
+			"windows": {
+				"command": "py"
+			},
+			"osx": {
+				"command": "python3"
+			},
+			"linux": {
+				"command": "python3"
+			},
+			"args": [
+				"${env:WWISEROOT}/Scripts/Build/Plugins/wp.py",
+				"build",
+				"Documentation"
+			],
+			"group": "build"
+		},
+		{
+			"label": "wp.py package",
+			"type": "shell",
+			"windows": {
+				"command": "py"
+			},
+			"osx": {
+				"command": "python3"
+			},
+			"linux": {
+				"command": "python3"
+			},
+			"args": [
+				"${env:WWISEROOT}/Scripts/Build/Plugins/wp.py",
+				"package",
+				"${input:platform}",
+				"-v",
+				"${input:version}"
+			]
+		},
+		{
+			"label": "wp.py generate-bundle",
+			"type": "shell",
+			"windows": {
+				"command": "py"
+			},
+			"osx": {
+				"command": "python3"
+			},
+			"linux": {
+				"command": "python3"
+			},
+			"args": [
+				"${env:WWISEROOT}/Scripts/Build/Plugins/wp.py",
+				"generate-bundle",
+				"-v",
+				"${input:version}"
+			]
+		}
+	],
+	"inputs": [
+		{
+			"id": "platform",
+			"type": "pickString",
+			"description": "Platform to target",
+			"options": [
+				"Authoring",
+				"Windows_vc170",
+				"Windows_vc160",
+				"Windows_vc150",
+				"Android",
+				"macOS",
+				"iOS",
+				"tvOS",
+				"Linux",
+				"PS5",
+				"PS4",
+				"XboxOne",
+				"XboxSeriesX",
+				"NX",
+				"Documentation",
+				"Common"
+			]
+		},
+		{
+			"id": "config",
+			"type": "pickString",
+			"description": "Configuration to build",
+			"options": [
+				"Release",
+				"Debug",
+				"Profile",
+				"Release(StaticCRT)",
+				"Debug(StaticCRT)",
+				"Profile(StaticCRT)",
+			]
+		},
+		{
+			"id": "arch",
+			"type": "pickString",
+			"description": "Select architecture",
+			"options": [
+				"x64",
+				"x32",
+				// MacOS
+				"universal",
+				"arm64",
+				"x86",
+				"x86_64",
+				"Win32",
+				// Android
+				"armeabi-v7a",
+				"arm64-v8a",
+				"iOS",
+				"tvOS",
+				// PS5
+				"Prospero",
+				// PS4
+				"ORBIS",
+				// XboxOne
+				"DURANGO",
+				// XboxSeriesX
+				"Gaming.Xbox.Scarlett.x64",
+				// Nintendo Switch
+				"NX32",
+				"NX64"
+			]
+		},
+		{
+			"id": "toolset",
+			"type": "pickString",
+			"description": "Select toolset",
+			"options": [
+				"vc170",
+				"vc160",
+				"vc150"
+			]
+		},
+		{
+			"id": "version",
+			"type": "promptString",
+			"description": "Enter your plug-in version (xxxx.x.x.xxxx)"
+		}
+	]
+}
