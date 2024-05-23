@@ -2,7 +2,7 @@
 This repository contains custom audio plugins for Wwise, developed by CCP.
 
 
-### Quick Set-Up Guide
+## Quick Set-Up Guide
 
 To build the property help documentation, install these two Python dependencies: 
 
@@ -36,7 +36,7 @@ This will output the binaries directly to your Wwise installation and will be re
 
 For a more in-depth documentation for all the above, please visit  Wwise's documenation for [Using the Development Tools](https://www.audiokinetic.com/en/library/edge/?source=SDK&id=effectplugin_tools.html).
 
-### Requirments
+## Requirments
 
 To build Authoring and Engine plugins on Windows you’ll need:
 
