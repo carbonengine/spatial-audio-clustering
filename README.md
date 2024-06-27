@@ -77,7 +77,7 @@ To build Authoring and Engine plugins on Windows you’ll need:
     - C++ ATL for latest v142 build tools (x86 & x64)
     - C++ MFC for latest v142 build tools (x86 & x64)
     - Windows Universal CRT SDK
-    - Windows 10 SDK (10.0.19041.0)
+    - Windows 10 SDK (10.0.20348.0)
         - Different version can be specified in a generated PremakePlugin.lua file
 - If using Visual Studio 2022
     - Requirements are the same as for 2019, but components of version v143 must be installed instead
