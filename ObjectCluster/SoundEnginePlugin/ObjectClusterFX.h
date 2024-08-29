@@ -32,6 +32,8 @@ the specific language governing permissions and limitations under the License.
 #include <limits>
 #include <cmath>
 #include <unordered_map>
+#include <cstdlib>
+#include <malloc.h>
 
 #include "ObjectClusterFXParams.h"
 #include <AK/Plugin/PluginServices/AkMixerInputMap.h>
@@ -44,6 +46,8 @@ struct GeneratedObjects
 	bool isClustered = false;
 
 	AkAudioObjectID outputObjKey;
+
+	AK::SpeakerVolumes::MatrixPtr volumeMatrix = nullptr;
 
 	int index;  /// We use an index mark each output object as "visited" and map them to input objects (index in the array) at the same time.
 
@@ -103,8 +107,21 @@ private:
 		AkAudioBuffer* inbuf,
 		AkAudioBuffer* pBufferOut,
 		const AkRamp& cumulativeGain,
-		AK::SpeakerVolumes::MatrixPtr mxCurrent
+		AK::SpeakerVolumes::MatrixPtr mxCurrent,
+		AK::SpeakerVolumes::MatrixPtr mxPrevious
 	);
+
+	inline AKRESULT AllocateVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix, AkUInt32 in_uNumChannelsIn, AkUInt32 in_uNumChannelsOut)
+	{
+		AkUInt32 size = AK::SpeakerVolumes::Matrix::GetRequiredSize(in_uNumChannelsIn, in_uNumChannelsOut);
+
+#if _WIN32
+		volumeMatrix = (AK::SpeakerVolumes::MatrixPtr)_aligned_malloc(size, AK_SIMD_ALIGNMENT);
+#else
+		volumeMatrix = (AK::SpeakerVolumes::MatrixPtr)std::aligned_alloc(AK_SIMD_ALIGNMENT, size);
+#endif
+		return volumeMatrix ? AK_Success : AK_InsufficientMemory;
+	}
 
 	AkMixerInputMap<AkUInt64, GeneratedObjects> m_mapInObjsToOutObjs;
 	std::map<AkVector, std::vector<AkAudioObjectID>> clustersData;

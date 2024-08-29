@@ -228,7 +228,7 @@ void ObjectClusterFX::Execute(
                 {
                     if ((*it).pUserData->isClustered == true)
                     {
-						MixInputToOutput(in_objects.ppObjects[(*it).pUserData->index], inbuf, pBufferOut, in_objects.ppObjects[(*it).pUserData->index]->cumulativeGain, nullptr);
+						MixInputToOutput(in_objects.ppObjects[(*it).pUserData->index], inbuf, pBufferOut, in_objects.ppObjects[(*it).pUserData->index]->cumulativeGain, nullptr, (*it).pUserData->volumeMatrix);
 
                         std::string objName = std::to_string((*it).pUserData->outputObjKey);
                         pObjOut->SetName(m_pAllocator, objName.c_str());
@@ -300,31 +300,35 @@ void ObjectClusterFX::MixInputToOutput(
     AkAudioBuffer* inbuf,
     AkAudioBuffer* pBufferOut,
     const AkRamp& cumulativeGain,
-    AK::SpeakerVolumes::MatrixPtr mxCurrent
+    AK::SpeakerVolumes::MatrixPtr mxCurrent,
+	AK::SpeakerVolumes::MatrixPtr mxPrevious
 ) {
     // Prepare the mixing matrix for this input
     AkUInt32 uTransmixSize = AK::SpeakerVolumes::Matrix::GetRequiredSize(
         inbuf->NumChannels(),
         pBufferOut->NumChannels()
     );
-
+    
     mxCurrent = (AK::SpeakerVolumes::MatrixPtr)AkAllocaSIMD(uTransmixSize);
 
     // Zero out the mixing matrix
     AK::SpeakerVolumes::Matrix::Zero(mxCurrent, inbuf->NumChannels(), pBufferOut->NumChannels());
 
-    // Compute panning gains and fill the mixing matrix
-    m_pContext->GetMixerCtx()->Compute3DPositioning(
-        inobj->positioning.threeD.xform,
-        AkTransform(),
-        inobj->positioning.behavioral.center,
-        inobj->positioning.threeD.spread,
-        inobj->positioning.threeD.focus,
+    // Compute panning gains and fill the mixing matrix.
+
+    m_pContext->GetMixerCtx()->ComputePositioning(
+        inobj->positioning,
         inbuf->GetChannelConfig(),
-        inobj->positioning.threeD.uEmitterChannelMask,
         pBufferOut->GetChannelConfig(),
         mxCurrent
     );
+
+    if (mxPrevious == nullptr) {
+		AKRESULT eResult = AllocateVolumes(mxPrevious, inbuf->NumChannels(), pBufferOut->NumChannels());
+        if (eResult == AK_Success) {
+			AKPLATFORM::AkMemCpy(mxPrevious, mxCurrent, uTransmixSize);
+        }
+    }
 
     // Mix the channels of the input object into the clustered output object
     AK_GET_PLUGIN_SERVICE_MIXER(m_pContext->GlobalContext())->MixNinNChannels(
@@ -332,9 +336,11 @@ void ObjectClusterFX::MixInputToOutput(
         pBufferOut,
         cumulativeGain.fPrev, // Gain for the input object
         cumulativeGain.fNext, // Gain for the output object
-        mxCurrent,
+        mxPrevious,
         mxCurrent
     );
+
+    AKPLATFORM::AkMemCpy(mxPrevious, mxCurrent, uTransmixSize);
 }
 
 void ObjectClusterFX::ClearOutputBuffers(AkAudioObjects& outputObjects) {
