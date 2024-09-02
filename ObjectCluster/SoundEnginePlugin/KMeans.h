@@ -212,8 +212,8 @@ public:
         return centroids;
     }
 
-    std::map<AkVector, std::vector<AkAudioObjectID>> getClusters() const {
-        std::map<AkVector, std::vector<AkAudioObjectID>> clusterMap;
+    std::map<AkTransform, std::vector<AkAudioObjectID>> getClusters() const {
+        std::map<AkTransform, std::vector<AkAudioObjectID>> clusterMap;
 
         for (const auto& cluster : clusters) {
             if (!cluster.empty()) {
@@ -227,16 +227,20 @@ public:
                 centroid.Y /= cluster.size();
                 centroid.Z /= cluster.size();
 
+                AkTransform centroidTransform;
+                // Orientation must be orthogonal
+                centroidTransform.SetOrientation(AkVector{ 1, 0, 0 }, AkVector{ 0, 1, 0 });
+                centroidTransform.SetPosition(centroid);
+
                 std::vector<AkAudioObjectID> objectIDs;
                 for (const auto& obj : cluster) {
                     objectIDs.push_back(obj.key);
                 }
 
-                clusterMap[centroid] = std::move(objectIDs);
+                clusterMap[centroidTransform] = std::move(objectIDs);
             }
         }
 
         return clusterMap;
     }
-
 };

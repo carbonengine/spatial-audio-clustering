@@ -24,13 +24,14 @@ the specific language governing permissions and limitations under the License.
   Copyright (c) 2023 Audiokinetic Inc.
 *******************************************************************************/
 
+#include <set>
+#include <string>
+#include <unordered_map>
 #include "ObjectClusterFX.h"
 #include "../ObjectClusterConfig.h"
 #define NOMINMAX
 #include <Windows.h>
 #include <AK/AkWwiseSDKVersion.h>
-#include <string>
-
 
 #include <cfloat> // For FLT_MAX
 AK::IAkPlugin* CreateObjectClusterFX(AK::IAkPluginMemAlloc* in_pAllocator)
@@ -45,10 +46,12 @@ AK::IAkPluginParam* CreateObjectClusterFXParams(AK::IAkPluginMemAlloc* in_pAlloc
 
 AK_IMPLEMENT_PLUGIN_FACTORY(ObjectClusterFX, AkPluginTypeEffect, ObjectClusterConfig::CompanyID, ObjectClusterConfig::PluginID)
 
+
 ObjectClusterFX::ObjectClusterFX()
     : m_pParams(nullptr)
     , m_pAllocator(nullptr)
     , m_pContext(nullptr)
+    , m_uniqueClusterID(256)
 {
 }
 
@@ -71,8 +74,8 @@ AKRESULT ObjectClusterFX::Init(AK::IAkPluginMemAlloc* in_pAllocator, AK::IAkEffe
 
 AKRESULT ObjectClusterFX::Term(AK::IAkPluginMemAlloc* in_pAllocator)
 {
-    AK_PLUGIN_DELETE(in_pAllocator, this);
-    return AK_Success;
+	AK_PLUGIN_DELETE(in_pAllocator, this);
+	return AK_Success;
 }
 
 AKRESULT ObjectClusterFX::Reset()
@@ -82,54 +85,101 @@ AKRESULT ObjectClusterFX::Reset()
 
 AKRESULT ObjectClusterFX::GetPluginInfo(AkPluginInfo& out_rPluginInfo)
 {
-    out_rPluginInfo.eType = AkPluginTypeEffect;
-    out_rPluginInfo.bIsInPlace = false;
-    out_rPluginInfo.bCanProcessObjects = true;
-	out_rPluginInfo.bUsesGainAttribute = true;
-    out_rPluginInfo.uBuildVersion = AK_WWISESDK_VERSION_COMBINED;
+	out_rPluginInfo.eType = AkPluginTypeEffect;
+	out_rPluginInfo.bIsInPlace = false;
+	out_rPluginInfo.bCanProcessObjects = true;
+	out_rPluginInfo.uBuildVersion = AK_WWISESDK_VERSION_COMBINED;
 
-    return AK_Success;
+	return AK_Success;
 }
 
 void ObjectClusterFX::Execute(
-    const AkAudioObjects& in_objects,  // Input objects and object buffers.
-    const AkAudioObjects& out_objects  // Output objects and object buffers.
+    const AkAudioObjects& inObjects,  // Input objects and object buffers.
+    const AkAudioObjects& outObjects  // Output objects and object buffers.
 ) {
-    AKASSERT(in_objects.uNumObjects > 0);
+    AKASSERT(inObjects.uNumObjects > 0);
 
+    BookkeepAudioObjects(inObjects);
+    WriteToOutput(inObjects);
+}
 
-    // Iterate through input objects and get ID and position
-    std::vector<ObjectPosition> objectPositions;
-    objectPositions.reserve(in_objects.uNumObjects);
-
-    for (AkUInt32 i = 0; i < in_objects.uNumObjects; ++i) {
-        AkAudioObject* inobj = in_objects.ppObjects[i];
-        objectPositions.push_back({ inobj->positioning.threeD.xform.Position(), inobj->key });
+void ObjectClusterFX::ApplyCustomMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, const AK::SpeakerVolumes::MatrixPtr& currentVolumes)
+{
+    if (inBuffer->uValidFrames == 0 || inBuffer->NumChannels() == 0 || outBuffer->NumChannels() == 0) {
+        return;
     }
 
-    // Set the distance param before clustering
-    kmeans.setDistanceThreshold(m_pParams->RTPC.distanceThreshold);
-    kmeans.setTolerance(m_pParams->RTPC.tolerance);
+    // Calculate the gain increment per sample
+    AkReal32 fOneOverNumFrames = 1.f / (AkReal32)inBuffer->uValidFrames;
+    AkReal32 gainIncrement = (cumulativeGain.fNext - cumulativeGain.fPrev) * fOneOverNumFrames;
 
-    kmeans.performClustering(objectPositions);
-    clustersData = kmeans.getClusters();
+    // Iterate through all frames
+    for (AkUInt32 frame = 0; frame < inBuffer->uValidFrames; ++frame) {
+        // Do some manual gain compensation and create a ramp
+        AkReal32 currentGain = cumulativeGain.fPrev + gainIncrement * frame;
+        //Iterate for every channel and mix the input to the output
+        AkReal32* inSamples = inBuffer->GetChannel(0) + frame;
+        for (AkUInt32 inChan = 0; inChan < inBuffer->NumChannels(); ++inChan, inSamples += inBuffer->uValidFrames) {
+            //Get the current input sample
+            AkReal32 inSample = *inSamples;
+            AkReal32* outSamples = outBuffer->GetChannel(0) + frame;
+            for (AkUInt32 outChan = 0; outChan < outBuffer->NumChannels(); ++outChan, outSamples += outBuffer->uValidFrames) {
+                // The actual mixing inSample multiplied by the current gain
+                *outSamples += inSample * currentGain * currentVolumes[inChan * outBuffer->NumChannels() + outChan];
+            }
+        }
+    }
+
+    // Make sure that the output buffer has a valid frame count
+    outBuffer->uValidFrames = AkMin(outBuffer->MaxFrames(), inBuffer->uValidFrames);
+	NormalizeBuffer(outBuffer);
+}
+
+void ObjectClusterFX::ApplyWwiseMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, const AK::SpeakerVolumes::MatrixPtr& currentVolumes, AK::SpeakerVolumes::MatrixPtr& prevVolumes)
+{
+	AkUInt32 uTransmixSize = AK::SpeakerVolumes::Matrix::GetRequiredSize(inBuffer->NumChannels(), outBuffer->NumChannels());
+
+    // If mixVolumes doesn't exist, allocate and set it to the current volumes
+    if (prevVolumes == nullptr)
+    {
+		AKRESULT eResult = AllocateVolumes(prevVolumes, inBuffer->NumChannels(), outBuffer->NumChannels());
+        if (eResult == AK_Success) {
+			AKPLATFORM::AkMemCpy(prevVolumes, currentVolumes, uTransmixSize);
+        }
+    }
+    
+	AK_GET_PLUGIN_SERVICE_MIXER(m_pContext->GlobalContext())->MixNinNChannels(
+		inBuffer,
+		outBuffer,
+		cumulativeGain.fPrev,
+		cumulativeGain.fNext,
+		prevVolumes,
+		currentVolumes	
+	);
+	// Update stored volumes
+	AKPLATFORM::AkMemCpy(prevVolumes, currentVolumes, uTransmixSize);
+}
+
+void ObjectClusterFX::BookkeepAudioObjects(const AkAudioObjects& inObjects)
+{
+    m_clustersData = GenerateClusters(inObjects);
 
     // Create a map to track which clusters already have output objects created
     std::unordered_map<int, AkAudioObjectID> clusterOutputObjects;
 
-    for (AkUInt32 i = 0; i < in_objects.uNumObjects; ++i) {
-        AkAudioObject* inobj = in_objects.ppObjects[i];
+    for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i) {
+        AkAudioObject* inobj = inObjects.ppObjects[i];
         AkAudioObjectID key = inobj->key;
 
         // Find the cluster this object belongs to
-        auto clusterIt = std::find_if(clustersData.begin(), clustersData.end(),
+        auto clusterIt = std::find_if(m_clustersData.begin(), m_clustersData.end(),
             [&key](const auto& pair) {
                 return std::find(pair.second.begin(), pair.second.end(), key) != pair.second.end();
             });
 
         GeneratedObjects* pEntry = m_mapInObjsToOutObjs.Exists(key);
 
-        bool isClustered = (clusterIt != clustersData.end());
+        bool isClustered = (clusterIt != m_clustersData.end());
 
         if (pEntry) {
             // If the entry already exists, update the index
@@ -144,14 +194,14 @@ void ObjectClusterFX::Execute(
 
                 if (isClustered) {
                     // Get the cluster index
-                    int clusterIndex = std::distance(clustersData.begin(), clusterIt);
+                    int clusterIndex = std::distance(m_clustersData.begin(), clusterIt);
 
                     // Check if an output object has already been created for this cluster
                     auto outputObjIt = clusterOutputObjects.find(clusterIndex);
 
                     if (outputObjIt == clusterOutputObjects.end()) {
                         // This is the first object in the cluster, so create a new output object
-                        outputObjKey = CreateOutputObject(inobj, in_objects, i, m_pContext);
+                        outputObjKey = CreateOutputObject(inobj, inObjects, i, m_pContext);
 
                         // Store the output object ID for this cluster
                         clusterOutputObjects[clusterIndex] = outputObjKey;
@@ -161,12 +211,13 @@ void ObjectClusterFX::Execute(
                         outputObjKey = outputObjIt->second;
                     }
 
+				    pEntry->uniqueClusterID = GenerateUniqueID();
                     pEntry->outputObjKey = outputObjKey;
                     pEntry->isClustered = true;
                 }
                 else {
                     // If not clustered, create a unique output object
-                    outputObjKey = CreateOutputObject(inobj, in_objects, i, m_pContext);
+                    outputObjKey = CreateOutputObject(inobj, inObjects, i, m_pContext);
 
                     if (outputObjKey != AK_INVALID_AUDIO_OBJECT_ID) {
                         pEntry->outputObjKey = outputObjKey;
@@ -179,8 +230,168 @@ void ObjectClusterFX::Execute(
             }
         }
     }
+}
 
-    // First, query the number of output objects.
+void ObjectClusterFX::ClearOutputBuffers(AkAudioObjects& outputObjects) 
+{
+    for (AkUInt32 i = 0; i < outputObjects.uNumObjects; ++i) {
+        AkAudioBuffer* pBufferOut = outputObjects.ppObjectBuffers[i];
+        for (AkUInt32 j = 0; j < pBufferOut->NumChannels(); ++j) {
+            // Clear the buffer to zero
+            std::fill(pBufferOut->GetChannel(j), pBufferOut->GetChannel(j) + pBufferOut->MaxFrames(), 0.0f);
+        }
+    }
+}
+
+AkAudioObjectID ObjectClusterFX::CreateOutputObject(const AkAudioObject* inobj, const AkAudioObjects& inObjects, const AkUInt32 index, AK::IAkEffectPluginContext* m_pContext)
+{
+    AkAudioObjectID outputObjKey = AK_INVALID_AUDIO_OBJECT_ID;
+
+    AkUInt32 numObjsOut = 1;
+
+    // Allocate space for a new output object
+    AkAudioObject* newObject = (AkAudioObject*)AkAlloca(sizeof(AkAudioObject*));
+    AkAudioObjects outputObjects;
+    outputObjects.uNumObjects = numObjsOut;
+    outputObjects.ppObjectBuffers = nullptr;
+    outputObjects.ppObjects = &newObject;
+
+    if (m_pContext->CreateOutputObjects(inObjects.ppObjectBuffers[index]->GetChannelConfig(), outputObjects) == AK_Success)
+    {
+        AkAudioObject* pObject = newObject;
+        outputObjKey = pObject->key;
+
+        pObject->CopyContents(*inobj);
+        pObject->positioning.behavioral.spatMode = inobj->positioning.behavioral.spatMode;
+        pObject->positioning.threeD = inobj->positioning.threeD;
+    }
+
+    return outputObjKey;
+}
+
+void ObjectClusterFX::CopyBuffer(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer)
+{
+	for (AkUInt32 j = 0; j < inBuffer->NumChannels(); ++j)
+	{
+		AkReal32* pInBuf = inBuffer->GetChannel(j);
+		AkReal32* outBuf = outBuffer->GetChannel(j);
+		memcpy(outBuf, pInBuf, inBuffer->uValidFrames * sizeof(AkReal32));
+	}
+}
+
+ ClusterMap ObjectClusterFX::GenerateClusters(const AkAudioObjects& inObjects)
+{
+    return m_pParams->RTPC.useKmeansClustering
+        ? GenerateKmeansClusters(inObjects)
+        : GeneratePositionalClusters(inObjects);
+}
+
+ClusterMap ObjectClusterFX::GenerateKmeansClusters(const AkAudioObjects& inObjects)
+{
+    // Iterate through input objects and get ID and position
+    std::vector<ObjectPosition> objectPositions;
+    objectPositions.reserve(inObjects.uNumObjects);
+
+    for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i) {
+        AkAudioObject* inobj = inObjects.ppObjects[i];
+        objectPositions.push_back({ inobj->positioning.threeD.xform.Position(), inobj->key });
+    }
+
+    // Set the distance param before clustering
+    m_kmeans.setDistanceThreshold(m_pParams->RTPC.distanceThreshold);
+    m_kmeans.setTolerance(m_pParams->RTPC.tolerance);
+
+    m_kmeans.performClustering(objectPositions);
+    return m_kmeans.getClusters();
+}
+
+ ClusterMap ObjectClusterFX::GeneratePositionalClusters(const AkAudioObjects& inObjects)
+{
+
+	std::map<AkTransform, std::vector<AkAudioObjectID>> clusterMap;
+    // Create new position clusters if needed and update existing ones.
+    for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i)
+    {
+        AkAudioObject* inObject = inObjects.ppObjects[i];
+
+        auto it = clusterMap.find(inObject->positioning.threeD.xform);
+        if (it == clusterMap.end())
+        {
+            std::vector<AkAudioObjectID> inObjectKeys;
+            inObjectKeys.push_back(inObject->key);
+            clusterMap.insert(std::make_pair(inObject->positioning.threeD.xform, inObjectKeys));
+        }
+        else
+        {
+            it->second.push_back(inObject->key);
+        }
+    }
+
+    return clusterMap;
+}
+
+void ObjectClusterFX::MixInputToOutput(const AkAudioObject* inObject, AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, AK::SpeakerVolumes::MatrixPtr& prevVolumes)
+{
+    if (inBuffer->uValidFrames == 0 || inBuffer->NumChannels() == 0 || outBuffer->NumChannels() == 0) {
+        return;
+    }
+
+	AkUInt32 uTransmixSize = AK::SpeakerVolumes::Matrix::GetRequiredSize(inBuffer->NumChannels(), outBuffer->NumChannels());
+	AK::SpeakerVolumes::MatrixPtr currentVolumes = (AK::SpeakerVolumes::MatrixPtr)AkAllocaSIMD(uTransmixSize);
+	//AK::SpeakerVolumes::Matrix::Zero(mx, inBuffer->NumChannels(), outBuffer->NumChannels());
+
+	AKRESULT result = m_pContext->GetMixerCtx()->ComputePositioning(
+		inObject->positioning,
+		inBuffer->GetChannelConfig(),
+		outBuffer->GetChannelConfig(),
+	    currentVolumes	
+	);
+
+    if (m_pParams->RTPC.useCustomDSP)
+    {
+        ApplyCustomMix(inBuffer, outBuffer, cumulativeGain, currentVolumes);
+    }
+    else
+    {
+        ApplyWwiseMix(inBuffer, outBuffer, cumulativeGain, currentVolumes, prevVolumes);
+
+    }
+}
+
+void ObjectClusterFX::NormalizeBuffer(AkAudioBuffer* pBuffer)
+{
+    if (pBuffer->uValidFrames == 0 || pBuffer->NumChannels() == 0) {
+        return;
+    }
+
+    // Find the maximum absolute sample value across all channels
+    AkReal32 maxSample = 0.0f;
+    AkUInt32 numChannels = pBuffer->NumChannels();
+    AkUInt32 validFrames = pBuffer->uValidFrames;
+
+    for (AkUInt32 chan = 0; chan < numChannels; ++chan) {
+        AkReal32* pChannel = pBuffer->GetChannel(chan);
+        for (AkUInt32 frame = 0; frame < validFrames; ++frame) {
+            maxSample = std::max(maxSample, std::abs(pChannel[frame]));
+        }
+    }
+
+    // If the maximum sample is greater than 1.0, normalize the buffer
+    if (maxSample > 1.0f) {
+        AkReal32 normalizationFactor = 1.0f / maxSample;
+        for (AkUInt32 chan = 0; chan < numChannels; ++chan) {
+            AkReal32* pChannel = pBuffer->GetChannel(chan);
+            for (AkUInt32 frame = 0; frame < validFrames; ++frame) {
+                pChannel[frame] *= normalizationFactor;
+            }
+        }
+    }
+}
+
+void ObjectClusterFX::WriteToOutput(const AkAudioObjects& inObjects)
+{
+    std::set<AkAudioObjectID> visitedClusters;
+  
     AkAudioObjects outputObjects;
     outputObjects.uNumObjects = 0;
     outputObjects.ppObjectBuffers = nullptr;
@@ -195,19 +406,18 @@ void ObjectClusterFX::Execute(
         outputObjects.ppObjects = objectsOut;
         m_pContext->GetOutputObjects(outputObjects);
 
-        // Clear the output buffers.
-		ClearOutputBuffers(outputObjects);
+        ClearOutputBuffers(outputObjects);
 
         // Iterate through our internal map.
         AkMixerInputMap<AkAudioObjectID, GeneratedObjects>::Iterator it = m_mapInObjsToOutObjs.Begin();
-
         while (it != m_mapInObjsToOutObjs.End())
         {
             // Has the input object been passed to Execute?
             if ((*it).pUserData->index >= 0)
             {
                 // Retrieve the input buffer.
-                AkAudioBuffer* inbuf = in_objects.ppObjectBuffers[(*it).pUserData->index];
+                AkAudioBuffer* inbuf = inObjects.ppObjectBuffers[(*it).pUserData->index];
+                AkAudioObject* inObj = inObjects.ppObjects[(*it).pUserData->index];
                 const AkUInt32 uNumChannels = inbuf->NumChannels();
 
                 // Find the correct output object.
@@ -226,37 +436,33 @@ void ObjectClusterFX::Execute(
 
                 if (pObjOut)
                 {
-                    if ((*it).pUserData->isClustered == true)
+                    if ((*it).pUserData->isClustered != true)
                     {
-						MixInputToOutput(in_objects.ppObjects[(*it).pUserData->index], inbuf, pBufferOut, in_objects.ppObjects[(*it).pUserData->index]->cumulativeGain, nullptr, (*it).pUserData->volumeMatrix);
+                        // If not clustered, simply copy the input to the output.
+                        CopyBuffer(inbuf, pBufferOut);
 
-                        std::string objName = std::to_string((*it).pUserData->outputObjKey);
+                        // Also, propagate the associated input object's custom metadata to the output.
+                        std::string objName = "Not clustered";
                         pObjOut->SetName(m_pAllocator, objName.c_str());
+                        pBufferOut->uValidFrames = inbuf->uValidFrames;
                     }
                     else
                     {
-                        // If not clustered, simply copy the input to the output.
-                        for (AkUInt32 j = 0; j < uNumChannels; ++j)
-                        {
-                            AkReal32* pInBuf = inbuf->GetChannel(j);
-                            AkReal32* outBuf = pBufferOut->GetChannel(j);
-                            memcpy(outBuf, pInBuf, inbuf->uValidFrames * sizeof(AkReal32));
-                        }
+                        MixInputToOutput(inObj, inbuf, pBufferOut, inObj->cumulativeGain, (*it).pUserData->mixVolumes);
 
-                        std::string objName = "Not clustered";
+                        // Copy state.
+                        std::string objName = std::to_string((*it).pUserData->uniqueClusterID);
                         pObjOut->SetName(m_pAllocator, objName.c_str());
+                        pBufferOut->uValidFrames = inbuf->MaxFrames();
                     }
 
+
                     // Set output buffer state to indicate that it contains data.
-                    pBufferOut->uValidFrames = inbuf->uValidFrames;
-                    pBufferOut->eState = inbuf->eState;
-
+                    pBufferOut->eState = inbuf->eState != AK_NoMoreData ? inbuf->eState : AK_NoMoreData;
                     // Also, propagate the associated input object's custom metadata to the output.
-                    pObjOut->arCustomMetadata.Copy(in_objects.ppObjects[(*it).pUserData->index]->arCustomMetadata);
+                    pObjOut->arCustomMetadata.Copy(inObj->arCustomMetadata);
                 }
-
-                // Clear the index for the next frame.
-                (*it).pUserData->index = -1;
+                (*it).pUserData->index = -1;    // "clear" index for next frame.
                 ++it;
             }
             else
@@ -266,92 +472,4 @@ void ObjectClusterFX::Execute(
             }
         }
     }
-
 }
-
-AkAudioObjectID ObjectClusterFX::CreateOutputObject(AkAudioObject* inobj, const AkAudioObjects& in_objects, AkUInt32 index, AK::IAkEffectPluginContext* m_pContext)
-{
-    AkAudioObjectID outputObjKey = AK_INVALID_AUDIO_OBJECT_ID;
-
-    AkUInt32 numObjsOut = 1;
-
-    // Allocate space for a new output object
-    AkAudioObject* newObject = (AkAudioObject*)AkAlloca(sizeof(AkAudioObject*));
-    AkAudioObjects outputObjects;
-    outputObjects.uNumObjects = numObjsOut;
-    outputObjects.ppObjectBuffers = nullptr;
-    outputObjects.ppObjects = &newObject;
-
-    if (m_pContext->CreateOutputObjects(in_objects.ppObjectBuffers[index]->GetChannelConfig(), outputObjects) == AK_Success)
-    {
-        AkAudioObject* pObject = newObject;
-        outputObjKey = pObject->key;
-
-        //pObject->CopyContents(*inobj);
-        pObject->positioning.behavioral.spatMode = inobj->positioning.behavioral.spatMode;
-        pObject->positioning.threeD = inobj->positioning.threeD;
-    }
-
-    return outputObjKey;
-}
-
-void ObjectClusterFX::MixInputToOutput(
-	AkAudioObject* inobj,
-    AkAudioBuffer* inbuf,
-    AkAudioBuffer* pBufferOut,
-    const AkRamp& cumulativeGain,
-    AK::SpeakerVolumes::MatrixPtr mxCurrent,
-	AK::SpeakerVolumes::MatrixPtr mxPrevious
-) {
-    // Prepare the mixing matrix for this input
-    AkUInt32 uTransmixSize = AK::SpeakerVolumes::Matrix::GetRequiredSize(
-        inbuf->NumChannels(),
-        pBufferOut->NumChannels()
-    );
-    
-    mxCurrent = (AK::SpeakerVolumes::MatrixPtr)AkAllocaSIMD(uTransmixSize);
-
-    // Zero out the mixing matrix
-    AK::SpeakerVolumes::Matrix::Zero(mxCurrent, inbuf->NumChannels(), pBufferOut->NumChannels());
-
-    // Compute panning gains and fill the mixing matrix.
-
-    m_pContext->GetMixerCtx()->ComputePositioning(
-        inobj->positioning,
-        inbuf->GetChannelConfig(),
-        pBufferOut->GetChannelConfig(),
-        mxCurrent
-    );
-
-    if (mxPrevious == nullptr) {
-		AKRESULT eResult = AllocateVolumes(mxPrevious, inbuf->NumChannels(), pBufferOut->NumChannels());
-        if (eResult == AK_Success) {
-			AKPLATFORM::AkMemCpy(mxPrevious, mxCurrent, uTransmixSize);
-        }
-    }
-
-    // Mix the channels of the input object into the clustered output object
-    AK_GET_PLUGIN_SERVICE_MIXER(m_pContext->GlobalContext())->MixNinNChannels(
-        inbuf,
-        pBufferOut,
-        cumulativeGain.fPrev, // Gain for the input object
-        cumulativeGain.fNext, // Gain for the output object
-        mxPrevious,
-        mxCurrent
-    );
-
-    AKPLATFORM::AkMemCpy(mxPrevious, mxCurrent, uTransmixSize);
-}
-
-void ObjectClusterFX::ClearOutputBuffers(AkAudioObjects& outputObjects) {
-    for (AkUInt32 i = 0; i < outputObjects.uNumObjects; ++i) {
-        AkAudioBuffer* pBufferOut = outputObjects.ppObjectBuffers[i];
-        for (AkUInt32 j = 0; j < pBufferOut->NumChannels(); ++j) {
-            // Clear the buffer to zero
-            std::fill(pBufferOut->GetChannel(j), pBufferOut->GetChannel(j) + pBufferOut->MaxFrames(), 0.0f);
-        }
-    }
-}
-
-
-

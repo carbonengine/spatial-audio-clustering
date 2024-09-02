@@ -31,7 +31,6 @@ the specific language governing permissions and limitations under the License.
 #include <algorithm>
 #include <limits>
 #include <cmath>
-#include <unordered_map>
 #include <cstdlib>
 #include <malloc.h>
 
@@ -40,26 +39,61 @@ the specific language governing permissions and limitations under the License.
 
 #include "KMeans.h"
 
-struct GeneratedObjects
 
+#define AK_MAX_GENERATED_OBJECTS 128
+
+// The plugin needs to maintain a map of input object keys to generated objects.
+// Placeholder struct will be used later.
+
+struct GeneratedObjects
 {
 	bool isClustered = false;
-
+	AkAudioObjectID uniqueClusterID = -1;
 	AkAudioObjectID outputObjKey;
-
-	AK::SpeakerVolumes::MatrixPtr volumeMatrix = nullptr;
-
 	int index;  /// We use an index mark each output object as "visited" and map them to input objects (index in the array) at the same time.
-
+	AK::SpeakerVolumes::MatrixPtr mixVolumes = nullptr;
 };
 
-bool operator<(const AkVector& a, const AkVector& b)
+struct ClusterObject
+{
+	std::set<AkAudioObjectID> inObjectKeys;
+	AkAudioObjectID uniqueClusterID = -1;
+	AkAudioObjectID outputObjKey = -1;
+};
+
+bool operator==(const AkVector& a, const AkVector& b) 
+{
+	return a.X == b.X && a.Y == b.Y && a.Z == b.Z;
+}
+
+bool operator!=(const AkVector& a, const AkVector& b) 
+{
+	return a.X != b.X && a.Y != b.Y && a.Z != b.Z;
+}
+
+bool operator<(const AkVector& a, const AkVector& b) 
 {
 	if (a.X != b.X) return a.X < b.X;
 	if (a.Y != b.Y) return a.Y < b.Y;
 	if (a.Z != b.Z) return a.Z < b.Z;
 }
 
+bool operator == (const AkTransform a, const AkTransform b)
+{
+	return (a.OrientationFront() == b.OrientationFront()
+		&& a.OrientationTop() == b.OrientationTop()
+		&& a.Position() == b.Position()
+		);
+}
+
+bool operator<(const AkTransform& a, const AkTransform& b) 
+{
+	if (a.OrientationFront() != b.OrientationFront()) return a.OrientationFront() < b.OrientationFront();
+	if (a.OrientationTop() != b.OrientationTop()) return a.OrientationTop() < b.OrientationTop();
+	if (a.Position() != b.Position()) return a.Position() < b.Position();
+}
+
+using ClusterMap = std::map<AkTransform, std::vector<AkAudioObjectID>>;
 
 class ObjectClusterFX
 	: public AK::IAkOutOfPlaceObjectPlugin
@@ -67,7 +101,6 @@ class ObjectClusterFX
 public:
 	ObjectClusterFX();
 	~ObjectClusterFX();
-
 	/// Plug-in initialization.
 	/// Prepares the plug-in for data processing, allocates memory and sets up the initial conditions.
 	AKRESULT Init(AK::IAkPluginMemAlloc* in_pAllocator, AK::IAkEffectPluginContext* in_pContext, AK::IAkPluginParam* in_pParams, AkAudioFormat& in_rFormat) override;
@@ -85,36 +118,68 @@ public:
 
 	/// Effect plug-in DSP execution.
 	void Execute(
-		const AkAudioObjects& in_objects,	///< Input objects and object audio buffers.
-		const AkAudioObjects& out_objects	///< Output objects and object audio buffers.
-	) override;
+		const AkAudioObjects& inObjects,	///< Input objects and object audio buffers.
+		const AkAudioObjects& outObjects	///< Output objects and object audio buffers.
+		) override;
 
 private:
 	ObjectClusterFXParams* m_pParams;
 	AK::IAkPluginMemAlloc* m_pAllocator;
 	AK::IAkEffectPluginContext* m_pContext;
-	AkChannelConfig m_channelConfig;
+	int m_uniqueClusterID;
 
-	/// Create the output objects.
-	AkAudioObjectID CreateOutputObject(AkAudioObject* inobj, const AkAudioObjects& in_objects, AkUInt32 index, AK::IAkEffectPluginContext* m_pContext);
+	KMeans m_kmeans;
+	std::map<AkTransform, std::vector<AkAudioObjectID>> m_clustersData;
+	AkMixerInputMap<AkUInt64, GeneratedObjects> m_mapInObjsToOutObjs;
 
-	/// Clear the output buffers of the output objects.
-	void ObjectClusterFX::ClearOutputBuffers(AkAudioObjects& outputObjects);
 
-	/// Mix the input audio buffer to the output audio buffer.
-	void ObjectClusterFX::MixInputToOutput(
-		AkAudioObject* inobj,
-		AkAudioBuffer* inbuf,
-		AkAudioBuffer* pBufferOut,
-		const AkRamp& cumulativeGain,
-		AK::SpeakerVolumes::MatrixPtr mxCurrent,
-		AK::SpeakerVolumes::MatrixPtr mxPrevious
-	);
+	void ApplyCustomMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, const AK::SpeakerVolumes::MatrixPtr& currentVolumes);
+	void ApplyWwiseMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, const AK::SpeakerVolumes::MatrixPtr& currentVolumes, AK::SpeakerVolumes::MatrixPtr& prevVolumes);
+	void BookkeepAudioObjects(const AkAudioObjects& inObjects);
+	void BookkeepPositionalClusters(const AkAudioObjects& inObjects);
+	void ClearOutputBuffers(AkAudioObjects& outputObjects);
+	AkAudioObjectID CreateOutputObject(const AkAudioObject* inobj, const AkAudioObjects& inObjects, const AkUInt32 index, AK::IAkEffectPluginContext* m_pContext);
+	void CopyBuffer(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer);
+    ClusterMap GenerateClusters(const AkAudioObjects& inObjects);
+	ClusterMap GenerateKmeansClusters(const AkAudioObjects& inObjects);
+	ClusterMap GeneratePositionalClusters(const AkAudioObjects& inObjects);
+	void MixInputToOutput(const AkAudioObject* inObject, AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, AK::SpeakerVolumes::MatrixPtr& prevVolumes);
+	void NormalizeBuffer(AkAudioBuffer* pBuffer);
+	void WriteToOutput(const AkAudioObjects& inObjects);
 
-	inline AKRESULT AllocateVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix, AkUInt32 in_uNumChannelsIn, AkUInt32 in_uNumChannelsOut)
+	// helper function to find Objects by key
+	AkAudioObject* ObjectClusterFX::FindAudioObjectByKey(const AkAudioObjects& inObjects, const AkAudioObjectID key)
+	{
+		for (AkUInt32 j = 0; j < inObjects.uNumObjects; j++) {
+			if (inObjects.ppObjects[j]->key == key) {
+				return inObjects.ppObjects[j];
+			}
+		}
+		return nullptr;
+	}
+
+	// helper function to find Objects by key
+	AkAudioBuffer* ObjectClusterFX::FindAudioObjectBufferByKey(const AkAudioObjects& inObjects, const AkAudioObjectID key)
+	{
+		for (AkUInt32 j = 0; j < inObjects.uNumObjects; j++) {
+			if (inObjects.ppObjects[j]->key == key) {
+				return inObjects.ppObjectBuffers[j];
+			}
+		}
+		return nullptr;
+	}
+
+	// Helper function that tries to create unique object IDs
+	AkAudioObjectID ObjectClusterFX::GenerateUniqueID()
+	{
+		m_uniqueClusterID += 1;
+		return m_uniqueClusterID;
+	}
+
+
+	inline AKRESULT AllocateVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix, const AkUInt32 in_uNumChannelsIn, const AkUInt32 in_uNumChannelsOut)
 	{
 		AkUInt32 size = AK::SpeakerVolumes::Matrix::GetRequiredSize(in_uNumChannelsIn, in_uNumChannelsOut);
-
 #if _WIN32
 		volumeMatrix = (AK::SpeakerVolumes::MatrixPtr)_aligned_malloc(size, AK_SIMD_ALIGNMENT);
 #else
@@ -122,11 +187,6 @@ private:
 #endif
 		return volumeMatrix ? AK_Success : AK_InsufficientMemory;
 	}
-
-	AkMixerInputMap<AkUInt64, GeneratedObjects> m_mapInObjsToOutObjs;
-	std::map<AkVector, std::vector<AkAudioObjectID>> clustersData;
-
-	KMeans kmeans;
 };
 
 #endif // ObjectClusterFX_H

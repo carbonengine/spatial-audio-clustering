@@ -41,7 +41,7 @@ for the documentation about the plugin xml format
     </PluginInfo>
     <Properties>
       <!-- Add your property definitions here -->
-      <Property Name="distanceThreshold" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Distance Threshold">
+      <Property Name="CCP:distanceThreshold" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Distance Threshold">
         <UserInterface Step="0.1" Fine="0.001" Decimals="3" UIMax="100" />
         <DefaultValue>0.0</DefaultValue>
         <AudioEnginePropertyID>0</AudioEnginePropertyID>
@@ -54,7 +54,7 @@ for the documentation about the plugin xml format
           </ValueRestriction>
         </Restrictions>
       </Property>
-      <Property Name="tolerance" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Tolerance">
+      <Property Name="CCP:tolerance" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Tolerance">
         <UserInterface Step="0.0001" Fine="0.00001" Decimals="5" UIMax="1" />
         <DefaultValue>0.001</DefaultValue>
         <AudioEnginePropertyID>1</AudioEnginePropertyID>
@@ -66,6 +66,30 @@ for the documentation about the plugin xml format
             </Range>
           </ValueRestriction>
         </Restrictions>
+      </Property>
+      <Property Name="CCP:useKmeansClustering" DisplayName="Use KMeans Clustering" Type="bool" SupportRTPCType="Exclusive">
+          <DefaultValue>False</DefaultValue>
+          <AudioEnginePropertyID>2</AudioEnginePropertyID>
+          <Restrictions>
+              <ValueRestriction>
+                  <Range Type="bool">
+                      <Min>False</Min>
+                      <Max>True</Max>
+                  </Range>
+              </ValueRestriction>
+          </Restrictions>
+      </Property>
+      <Property Name="CCP:useCustomDSP" DisplayName="Use Custom Mixing DSP" Type="bool" SupportRTPCType="Exclusive">
+          <DefaultValue>False</DefaultValue>
+          <AudioEnginePropertyID>3</AudioEnginePropertyID>
+          <Restrictions>
+              <ValueRestriction>
+                  <Range Type="bool">
+                      <Min>False</Min>
+                      <Max>True</Max>
+                  </Range>
+              </ValueRestriction>
+          </Restrictions>
       </Property>
     </Properties>
   </EffectPlugin>
