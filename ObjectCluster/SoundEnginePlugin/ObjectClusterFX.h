@@ -32,7 +32,9 @@ the specific language governing permissions and limitations under the License.
 #include <limits>
 #include <cmath>
 #include <unordered_map>
-#include <cstdlib>
+
+#include <cstdlib> 
+#include <cstring>
 #include <malloc.h>
 
 #include "ObjectClusterFXParams.h"
@@ -111,6 +113,10 @@ private:
 		AK::SpeakerVolumes::MatrixPtr mxPrevious
 	);
 
+	void ObjectClusterFX::NormalizeBuffer(AkAudioBuffer* pBuffer);
+
+	void ObjectClusterFX::ApplyCustomMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, AK::SpeakerVolumes::MatrixPtr& currentVolumes);
+	
 	inline AKRESULT AllocateVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix, AkUInt32 in_uNumChannelsIn, AkUInt32 in_uNumChannelsOut)
 	{
 		AkUInt32 size = AK::SpeakerVolumes::Matrix::GetRequiredSize(in_uNumChannelsIn, in_uNumChannelsOut);

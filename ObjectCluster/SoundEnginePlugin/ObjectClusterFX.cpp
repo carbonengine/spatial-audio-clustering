@@ -296,13 +296,17 @@ AkAudioObjectID ObjectClusterFX::CreateOutputObject(AkAudioObject* inobj, const 
 }
 
 void ObjectClusterFX::MixInputToOutput(
-	AkAudioObject* inobj,
+    AkAudioObject* inobj,
     AkAudioBuffer* inbuf,
     AkAudioBuffer* pBufferOut,
     const AkRamp& cumulativeGain,
     AK::SpeakerVolumes::MatrixPtr mxCurrent,
 	AK::SpeakerVolumes::MatrixPtr mxPrevious
 ) {
+    if (inbuf->uValidFrames == 0 || inbuf->NumChannels() == 0 || pBufferOut->NumChannels() == 0) {
+        return;
+    }
+
     // Prepare the mixing matrix for this input
     AkUInt32 uTransmixSize = AK::SpeakerVolumes::Matrix::GetRequiredSize(
         inbuf->NumChannels(),
@@ -352,6 +356,66 @@ void ObjectClusterFX::ClearOutputBuffers(AkAudioObjects& outputObjects) {
         }
     }
 }
+
+void ObjectClusterFX::NormalizeBuffer(AkAudioBuffer* pBuffer)
+{
+    if (pBuffer->uValidFrames == 0 || pBuffer->NumChannels() == 0) {
+        return;
+    }
+
+    // Find the maximum absolute sample value across all channels
+    AkReal32 maxSample = 0.0f;
+    AkUInt32 numChannels = pBuffer->NumChannels();
+    AkUInt32 validFrames = pBuffer->uValidFrames;
+
+    for (AkUInt32 chan = 0; chan < numChannels; ++chan) {
+        AkReal32* pChannel = pBuffer->GetChannel(chan);
+        for (AkUInt32 frame = 0; frame < validFrames; ++frame) {
+            maxSample = std::max(maxSample, std::abs(pChannel[frame]));
+        }
+    }
+
+    // If the maximum sample is greater than 1.0, normalize the buffer
+    if (maxSample > 1.0f) {
+        AkReal32 normalizationFactor = 1.0f / maxSample;
+        for (AkUInt32 chan = 0; chan < numChannels; ++chan) {
+            AkReal32* pChannel = pBuffer->GetChannel(chan);
+            for (AkUInt32 frame = 0; frame < validFrames; ++frame) {
+                pChannel[frame] *= normalizationFactor;
+            }
+        }
+    }
+}
+
+void ObjectClusterFX::ApplyCustomMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, AK::SpeakerVolumes::MatrixPtr& currentVolumes)
+{
+    // Calculate the gain increment per sample
+    AkReal32 fOneOverNumFrames = 1.f / (AkReal32)inBuffer->uValidFrames;
+    AkReal32 gainIncrement = (cumulativeGain.fNext - cumulativeGain.fPrev) * fOneOverNumFrames;
+
+    // Iterate through all frames
+    for (AkUInt32 frame = 0; frame < inBuffer->uValidFrames; ++frame) {
+        // Do some manual gain compensation and create a ramp
+        AkReal32 currentGain = cumulativeGain.fPrev + gainIncrement * frame;
+        // Iterate for every channel and mix the input to the output
+        AkReal32* inSamples = inBuffer->GetChannel(0) + frame;
+        for (AkUInt32 inChan = 0; inChan < inBuffer->NumChannels(); ++inChan, inSamples += inBuffer->uValidFrames) {
+            // Get the current input sample
+            AkReal32 inSample = *inSamples;
+            AkReal32* outSamples = outBuffer->GetChannel(0) + frame;
+            for (AkUInt32 outChan = 0; outChan < outBuffer->NumChannels(); ++outChan, outSamples += outBuffer->uValidFrames) {
+                // The actual mixing inSample multiplied by the current gain
+                *outSamples += inSample * currentGain * currentVolumes[inChan * outBuffer->NumChannels() + outChan];
+            }
+        }
+    }
+
+    // Make sure that the output buffer has a valid frame count
+    outBuffer->uValidFrames = AkMin(outBuffer->MaxFrames(), inBuffer->uValidFrames);
+
+    NormalizeBuffer(outBuffer);
+}
+
 
 
 
