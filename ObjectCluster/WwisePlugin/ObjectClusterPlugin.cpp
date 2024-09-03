@@ -39,7 +39,10 @@ ObjectClusterPlugin::~ObjectClusterPlugin()
 bool ObjectClusterPlugin::GetBankParameters(const GUID & in_guidPlatform, AK::Wwise::Plugin::DataWriter& in_dataWriter) const
 {
     // Write bank data here
-    in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "Placeholder"));
+    in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:tolerance"));
+    in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:distanceThreshold"));
+    in_dataWriter.WriteBool(m_propertySet.GetBool(in_guidPlatform, "CCP:useKmeansClustering"));
+    in_dataWriter.WriteBool(m_propertySet.GetBool(in_guidPlatform, "CCP:useCustomDSP"));
 
     return true;
 }
