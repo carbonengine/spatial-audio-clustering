@@ -135,16 +135,15 @@ void ObjectClusterFX::ApplyCustomMix(AkAudioBuffer* inBuffer, AkAudioBuffer* out
 	NormalizeBuffer(outBuffer);
 }
 
-void ObjectClusterFX::ApplyWwiseMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, const AK::SpeakerVolumes::MatrixPtr& currentVolumes, AK::SpeakerVolumes::MatrixPtr& prevVolumes)
+void ObjectClusterFX::ApplyWwiseMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, const AK::SpeakerVolumes::MatrixPtr& currentVolumes, GeneratedObjects* pGeneratedObject)
 {
 	AkUInt32 uTransmixSize = AK::SpeakerVolumes::Matrix::GetRequiredSize(inBuffer->NumChannels(), outBuffer->NumChannels());
 
     // If mixVolumes doesn't exist, allocate and set it to the current volumes
-    if (prevVolumes == nullptr)
-    {
-		AKRESULT eResult = AllocateVolumes(prevVolumes, inBuffer->NumChannels(), outBuffer->NumChannels());
+    if (pGeneratedObject->volumeMatrix == nullptr) {
+        AKRESULT eResult = AllocateVolumes(pGeneratedObject->volumeMatrix, inBuffer->NumChannels(), outBuffer->NumChannels());
         if (eResult == AK_Success) {
-			AKPLATFORM::AkMemCpy(prevVolumes, currentVolumes, uTransmixSize);
+            AKPLATFORM::AkMemCpy(pGeneratedObject->volumeMatrix, currentVolumes, uTransmixSize);
         }
     }
     
@@ -153,11 +152,12 @@ void ObjectClusterFX::ApplyWwiseMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outB
 		outBuffer,
 		cumulativeGain.fPrev,
 		cumulativeGain.fNext,
-		prevVolumes,
-		currentVolumes	
+        pGeneratedObject->volumeMatrix,
+		currentVolumes
 	);
+
 	// Update stored volumes
-	AKPLATFORM::AkMemCpy(prevVolumes, currentVolumes, uTransmixSize);
+	AKPLATFORM::AkMemCpy(pGeneratedObject->volumeMatrix, currentVolumes, uTransmixSize);
 }
 
 void ObjectClusterFX::BookkeepAudioObjects(const AkAudioObjects& inObjects)
@@ -330,7 +330,7 @@ ClusterMap ObjectClusterFX::GenerateKmeansClusters(const AkAudioObjects& inObjec
     return clusterMap;
 }
 
-void ObjectClusterFX::MixInputToOutput(const AkAudioObject* inObject, AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, AK::SpeakerVolumes::MatrixPtr& prevVolumes)
+void ObjectClusterFX::MixInputToOutput(const AkAudioObject* inObject, AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, GeneratedObjects* pGeneratedObject)
 {
     if (inBuffer->uValidFrames == 0 || inBuffer->NumChannels() == 0 || outBuffer->NumChannels() == 0) {
         return;
@@ -353,7 +353,7 @@ void ObjectClusterFX::MixInputToOutput(const AkAudioObject* inObject, AkAudioBuf
     }
     else
     {
-        ApplyWwiseMix(inBuffer, outBuffer, cumulativeGain, currentVolumes, prevVolumes);
+        ApplyWwiseMix(inBuffer, outBuffer, cumulativeGain, currentVolumes, pGeneratedObject);
 
     }
 }
@@ -448,7 +448,7 @@ void ObjectClusterFX::WriteToOutput(const AkAudioObjects& inObjects)
                     }
                     else
                     {
-                        MixInputToOutput(inObj, inbuf, pBufferOut, inObj->cumulativeGain, (*it).pUserData->mixVolumes);
+                        MixInputToOutput(inObj, inbuf, pBufferOut, inObj->cumulativeGain, (*it).pUserData);
 
                         // Copy state.
                         std::string objName = std::to_string((*it).pUserData->uniqueClusterID);

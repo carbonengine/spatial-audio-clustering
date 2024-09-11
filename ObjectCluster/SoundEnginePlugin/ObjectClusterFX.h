@@ -51,7 +51,7 @@ struct GeneratedObjects
 	AkAudioObjectID uniqueClusterID = -1;
 	AkAudioObjectID outputObjKey;
 	int index;  /// We use an index mark each output object as "visited" and map them to input objects (index in the array) at the same time.
-	AK::SpeakerVolumes::MatrixPtr mixVolumes = nullptr;
+	AK::SpeakerVolumes::MatrixPtr volumeMatrix = nullptr;
 };
 
 struct ClusterObject
@@ -134,7 +134,7 @@ private:
 
 
 	void ApplyCustomMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, const AK::SpeakerVolumes::MatrixPtr& currentVolumes);
-	void ApplyWwiseMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, const AK::SpeakerVolumes::MatrixPtr& currentVolumes, AK::SpeakerVolumes::MatrixPtr& prevVolumes);
+	void ApplyWwiseMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, const AK::SpeakerVolumes::MatrixPtr& currentVolumes, GeneratedObjects* pGeneratedObject);
 	void BookkeepAudioObjects(const AkAudioObjects& inObjects);
 	void BookkeepPositionalClusters(const AkAudioObjects& inObjects);
 	void ClearOutputBuffers(AkAudioObjects& outputObjects);
@@ -143,7 +143,7 @@ private:
     ClusterMap GenerateClusters(const AkAudioObjects& inObjects);
 	ClusterMap GenerateKmeansClusters(const AkAudioObjects& inObjects);
 	ClusterMap GeneratePositionalClusters(const AkAudioObjects& inObjects);
-	void MixInputToOutput(const AkAudioObject* inObject, AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, AK::SpeakerVolumes::MatrixPtr& prevVolumes);
+	void MixInputToOutput(const AkAudioObject* inObject, AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, GeneratedObjects* pGeneratedObject);
 	void NormalizeBuffer(AkAudioBuffer* pBuffer);
 	void WriteToOutput(const AkAudioObjects& inObjects);
 
