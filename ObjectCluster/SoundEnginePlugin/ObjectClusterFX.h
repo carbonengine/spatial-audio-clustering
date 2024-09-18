@@ -38,60 +38,15 @@ the specific language governing permissions and limitations under the License.
 #include <AK/Plugin/PluginServices/AkMixerInputMap.h>
 
 #include "KMeans.h"
+#include "ClusterUtilities.h"
+#include "DSPUtilities.h"
+#include "SharedStructures.h"
 
 
 #define AK_MAX_GENERATED_OBJECTS 128
 
 // The plugin needs to maintain a map of input object keys to generated objects.
 // Placeholder struct will be used later.
-
-struct GeneratedObjects
-{
-	bool isClustered = false;
-	AkAudioObjectID uniqueClusterID = -1;
-	AkAudioObjectID outputObjKey;
-	int index;  /// We use an index mark each output object as "visited" and map them to input objects (index in the array) at the same time.
-	AK::SpeakerVolumes::MatrixPtr volumeMatrix = nullptr;
-};
-
-struct ClusterObject
-{
-	std::set<AkAudioObjectID> inObjectKeys;
-	AkAudioObjectID uniqueClusterID = -1;
-	AkAudioObjectID outputObjKey = -1;
-};
-
-bool operator==(const AkVector& a, const AkVector& b) 
-{
-	return a.X == b.X && a.Y == b.Y && a.Z == b.Z;
-}
-
-bool operator!=(const AkVector& a, const AkVector& b) 
-{
-	return a.X != b.X && a.Y != b.Y && a.Z != b.Z;
-}
-
-bool operator<(const AkVector& a, const AkVector& b) 
-{
-	if (a.X != b.X) return a.X < b.X;
-	if (a.Y != b.Y) return a.Y < b.Y;
-	if (a.Z != b.Z) return a.Z < b.Z;
-}
-
-bool operator == (const AkTransform a, const AkTransform b)
-{
-	return (a.OrientationFront() == b.OrientationFront()
-		&& a.OrientationTop() == b.OrientationTop()
-		&& a.Position() == b.Position()
-		);
-}
-
-bool operator<(const AkTransform& a, const AkTransform& b) 
-{
-	if (a.OrientationFront() != b.OrientationFront()) return a.OrientationFront() < b.OrientationFront();
-	if (a.OrientationTop() != b.OrientationTop()) return a.OrientationTop() < b.OrientationTop();
-	if (a.Position() != b.Position()) return a.Position() < b.Position();
-}
 
 using ClusterMap = std::map<AkTransform, std::vector<AkAudioObjectID>>;
 
@@ -129,45 +84,27 @@ private:
 	int m_uniqueClusterID;
 
 	KMeans m_kmeans;
+	ClusterUtilities m_clusterUtilities;
+	DSPUtilities m_dspUtilities;
+
 	std::map<AkTransform, std::vector<AkAudioObjectID>> m_clustersData;
 	AkMixerInputMap<AkUInt64, GeneratedObjects> m_mapInObjsToOutObjs;
 
-
-	void ApplyCustomMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, const AK::SpeakerVolumes::MatrixPtr& currentVolumes);
-	void ApplyWwiseMix(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, const AK::SpeakerVolumes::MatrixPtr& currentVolumes, GeneratedObjects* pGeneratedObject);
+	// Bookeeping for all Input Objects, uses the AkMixerInputMap to keep track of them.
 	void BookkeepAudioObjects(const AkAudioObjects& inObjects);
-	void BookkeepPositionalClusters(const AkAudioObjects& inObjects);
-	void ClearOutputBuffers(AkAudioObjects& outputObjects);
-	AkAudioObjectID CreateOutputObject(const AkAudioObject* inobj, const AkAudioObjects& inObjects, const AkUInt32 index, AK::IAkEffectPluginContext* m_pContext);
-	void CopyBuffer(AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer);
-    ClusterMap GenerateClusters(const AkAudioObjects& inObjects);
-	ClusterMap GenerateKmeansClusters(const AkAudioObjects& inObjects);
-	ClusterMap GeneratePositionalClusters(const AkAudioObjects& inObjects);
-	void MixInputToOutput(const AkAudioObject* inObject, AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, GeneratedObjects* pGeneratedObject);
-	void NormalizeBuffer(AkAudioBuffer* pBuffer);
+	// Utilize the map to write to the input objects to their corresponding output objects.
 	void WriteToOutput(const AkAudioObjects& inObjects);
-
-	// helper function to find Objects by key
-	AkAudioObject* ObjectClusterFX::FindAudioObjectByKey(const AkAudioObjects& inObjects, const AkAudioObjectID key)
-	{
-		for (AkUInt32 j = 0; j < inObjects.uNumObjects; j++) {
-			if (inObjects.ppObjects[j]->key == key) {
-				return inObjects.ppObjects[j];
-			}
-		}
-		return nullptr;
-	}
-
-	// helper function to find Objects by key
-	AkAudioBuffer* ObjectClusterFX::FindAudioObjectBufferByKey(const AkAudioObjects& inObjects, const AkAudioObjectID key)
-	{
-		for (AkUInt32 j = 0; j < inObjects.uNumObjects; j++) {
-			if (inObjects.ppObjects[j]->key == key) {
-				return inObjects.ppObjectBuffers[j];
-			}
-		}
-		return nullptr;
-	}
+	// Mix the Input object to the output, the method will redirect the mixing
+	// to either use the Wwise API or our custom mixing approach based on an RTPC.
+	void MixInputToOutput(
+		const AkAudioObject* inObject,
+		AkAudioBuffer* inBuffer,
+		AkAudioBuffer* outBuffer,
+		const AkRamp& cumulativeGain,
+		GeneratedObjects* pGeneratedObject
+	);
+	// Switch Clustering strategies based on the RTPC selection
+	ClusterMap GenerateClusters(const AkAudioObjects& inObjects);
 
 	// Helper function that tries to create unique object IDs
 	AkAudioObjectID ObjectClusterFX::GenerateUniqueID()
@@ -176,17 +113,6 @@ private:
 		return m_uniqueClusterID;
 	}
 
-
-	inline AKRESULT AllocateVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix, const AkUInt32 in_uNumChannelsIn, const AkUInt32 in_uNumChannelsOut)
-	{
-		AkUInt32 size = AK::SpeakerVolumes::Matrix::GetRequiredSize(in_uNumChannelsIn, in_uNumChannelsOut);
-#if _WIN32
-		volumeMatrix = (AK::SpeakerVolumes::MatrixPtr)_aligned_malloc(size, AK_SIMD_ALIGNMENT);
-#else
-		volumeMatrix = (AK::SpeakerVolumes::MatrixPtr)std::aligned_alloc(AK_SIMD_ALIGNMENT, size);
-#endif
-		return volumeMatrix ? AK_Success : AK_InsufficientMemory;
-	}
 };
 
 #endif // ObjectClusterFX_H
