@@ -4,243 +4,150 @@
 #include <limits>
 #include <cmath>
 #include <algorithm>
+#include <map>
 #include <AK/SoundEngine/Common/AkTypes.h>
 #include <AK/SoundEngine/Common/AkCommonDefs.h>
 #include <AK/Plugin/PluginServices/AkMixerInputMap.h>
+#include "CustomOperators.h"
 
 #undef min
 #undef max
 
+/**
+ * @brief Clamps a value between a minimum and maximum.
+ * @tparam T The type of the value and bounds.
+ * @param value The value to clamp.
+ * @param min The minimum allowed value.
+ * @param max The maximum allowed value.
+ * @return The clamped value.
+ */
 template <typename T>
-T clamp(T value, T min, T max) {
-    return std::max(min, std::min(max, value));
-}
+T clamp(T value, T min, T max);
 
+/**
+ * @brief Represents a position and key for an audio object.
+ */
 struct ObjectPosition {
-    AkVector position;
-    AkAudioObjectID key;
-
-    bool operator<(const ObjectPosition& other) const {
-        if (position.X != other.position.X) return position.X < other.position.X;
-        if (position.Y != other.position.Y) return position.Y < other.position.Y;
-        if (position.Z != other.position.Z) return position.Z < other.position.Z;
-        return key < other.key;
-    }
+    AkVector position; ///< The 3D position of the audio object.
+    AkAudioObjectID key; ///< The unique identifier of the audio object.
 };
 
+/**
+ * @brief Implements the K-means clustering algorithm for audio objects in 3D space.
+ *
+ * K-means clustering is an unsupervised machine learning algorithm that groups similar data points
+ * into a specified number (K) of clusters. It achieves this by iteratively assigning each data point
+ * to the cluster with the nearest mean (centroid) and then recalculating the cluster means until convergence.
+ * K-means is commonly used in customer segmentation, image compression, and anomaly detection.
+ *
+ * In the context of our use case, we adapt the algorithm to work in 3D space for audio object clustering.
+ * The implemented algorithm follows these steps:
+ * 1. **Initialization:** Randomly select K 3D positions of existing spatialized audio objects.
+ * 2. **Assignment:** Each audio object is assigned to the cluster whose centroid is closest to it
+ *    (based on 3D Euclidean distance).
+ * 3. **Update Step:** The centroid of each cluster is recalculated as the average position of all
+ *    audio objects assigned to it.
+ * 4. **Convergence:** This iterative process continues until the cluster assignments no longer change
+ *    significantly (the centroids stabilize) or a maximum number of iterations is reached.
+ * 5. **Result:** The final result is a set of `k` clusters, where each cluster is represented by a
+ *    single `AkAudioObject` whose position is the centroid of the cluster. Each audio object in the
+ *    input data is assigned to one of these clusters.
+ *
+ * This implementation provides functionality to cluster audio objects based on their 3D positions,
+ * which can be used for audio processing optimizations or spatial audio rendering.
+ */
 class KMeans {
 private:
-    // Centroids of the clusters
-    std::vector<AkVector> centroids;
-    // Seed for the random number generator
-    unsigned int seed;
-    // Tolerance is the threshold for the convergence of the algorithm
-    float tolerance;
-    // Distance threshold is the maximum distance between a point and a centroid to be considered in the same cluster
-    float distanceThreshold;
-    // Labels for each object
-    std::vector<int> labels;
-    // Maximum number of clusters
-    unsigned int maxClusters;
-    // Vector of clusters, each cluster is an unordered_set of ObjectPosition
-    std::vector<std::vector<ObjectPosition>> clusters;
+    std::vector<AkVector> centroids; ///< The centroids of the clusters.
+    unsigned int seed; ///< Seed for the random number generator.
+    float tolerance; ///< Tolerance for convergence.
+    float distanceThreshold; ///< Maximum distance for a point to be considered in a cluster.
+    std::vector<int> labels; ///< Labels assigning each point to a cluster.
+    unsigned int maxClusters; ///< Maximum number of clusters.
+    std::vector<std::vector<ObjectPosition>> clusters; ///< The resulting clusters.
 
-    unsigned int determineMaxClusters(unsigned int numObjects) {
-        return static_cast<unsigned int>(std::sqrt(numObjects));
-    }
+    /**
+     * @brief Determines the maximum number of clusters based on the number of objects.
+     * @param numObjects The number of objects to cluster.
+     * @return The maximum number of clusters.
+     */
+    unsigned int determineMaxClusters(unsigned int numObjects);
 
-    void initializeCentroids(const std::vector<AkVector>& points) {
-        std::default_random_engine generator(seed);
-        std::uniform_int_distribution<int> distribution(0, points.size() - 1);
+    /**
+     * @brief Initializes the centroids for the K-means algorithm.
+     * @param points The points to initialize centroids from.
+     */
+    void initializeCentroids(const std::vector<AkVector>& points);
 
-        centroids[0] = points[distribution(generator)];
-        for (size_t i = 1; i < centroids.size(); ++i) {
-            float maxDist = 0;
-            AkVector nextCentroid;
-            for (const auto& point : points) {
-                float minDist = std::numeric_limits<float>::max();
-                for (size_t j = 0; j < i; ++j) {
-                    float dist = calculateDistance(point, centroids[j]);
-                    if (dist < minDist) {
-                        minDist = dist;
-                    }
-                }
-                if (minDist > maxDist) {
-                    maxDist = minDist;
-                    nextCentroid = point;
-                }
-            }
-            centroids[i] = nextCentroid;
-        }
-    }
+    /**
+     * @brief Calculates the squared distance between two points.
+     * @param a The first point.
+     * @param b The second point.
+     * @return The squared distance between the points.
+     */
+    float calculateDistance(const AkVector& a, const AkVector& b) const;
 
-    inline float calculateDistance(const AkVector& a, const AkVector& b) const {
-        return (a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z);
-    }
+    /**
+     * @brief Assigns points to the nearest cluster.
+     * @param objects The objects to assign to clusters.
+     * @return True if any assignments changed, false otherwise.
+     */
+    bool assignPointsToClusters(const std::vector<ObjectPosition>& objects);
 
-    bool assignPointsToClusters(const std::vector<ObjectPosition>& objects) {
-        bool changed = false;
-        std::vector<std::vector<ObjectPosition>> newClusters(centroids.size());
+    /**
+     * @brief Updates the centroids based on the current cluster assignments.
+     * @return True if any centroid changed significantly, false otherwise.
+     */
+    bool updateCentroids();
 
-        for (size_t i = 0; i < objects.size(); ++i) {
-            float minDistance = std::numeric_limits<float>::max();
-            int closestCentroid = -1;
-            for (size_t j = 0; j < centroids.size(); ++j) {
-                float distance = calculateDistance(objects[i].position, centroids[j]);
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    closestCentroid = j;
-                }
-            }
-            if (labels[i] != closestCentroid) {
-                labels[i] = closestCentroid;
-                changed = true;
-            }
-            newClusters[closestCentroid].push_back(objects[i]);
-        }
-
-        if (changed) {
-            clusters = std::move(newClusters); // Use move semantics to avoid copying
-        }
-
-        return changed;
-    }
-
-    bool updateCentroids() {
-        if (clusters.empty()) return false;
-
-        std::vector<AkVector> new_centroids(centroids.size(), { 0, 0, 0 });
-        std::vector<int> counts(centroids.size(), 0);
-        bool changed = false;
-
-        for (size_t i = 0; i < clusters.size(); ++i) {
-            for (const auto& obj : clusters[i]) {
-                new_centroids[i].X += obj.position.X;
-                new_centroids[i].Y += obj.position.Y;
-                new_centroids[i].Z += obj.position.Z;
-                counts[i]++;
-            }
-
-            if (counts[i] > 0) {
-                AkVector new_centroid = { new_centroids[i].X / counts[i], new_centroids[i].Y / counts[i], new_centroids[i].Z / counts[i] };
-                if (calculateDistance(centroids[i], new_centroid) > tolerance * tolerance) {
-                    centroids[i] = new_centroid;
-                    changed = true;
-                }
-            }
-        }
-
-        return changed;
-    }
-
-    void adjustClusterCount(unsigned int numObjects) {
-        if (numObjects == 0) {
-            return;
-        }
-        maxClusters = determineMaxClusters(numObjects);
-        centroids.resize(maxClusters); // Resize centroids to match the adjusted number of clusters
-    }
+    /**
+     * @brief Adjusts the number of clusters based on the number of objects.
+     * @param numObjects The number of objects to cluster.
+     */
+    void adjustClusterCount(unsigned int numObjects);
 
 public:
-    KMeans(float tolerance = 0.01f, float distanceThreshold = 100.0f)
-        : tolerance(tolerance), distanceThreshold(distanceThreshold) {
-        std::random_device rd;
-        seed = rd();
-    }
+    /**
+     * @brief Constructs a KMeans instance.
+     * @param tolerance The convergence tolerance.
+     * @param distanceThreshold The maximum distance for a point to be in a cluster.
+     */
+    KMeans(float tolerance = 0.01f, float distanceThreshold = 100.0f);
 
-    void setTolerance(float newValue) {
-        tolerance = clamp(newValue, 0.001f, 1.0f);
-    }
+    /**
+     * @brief Sets the convergence tolerance.
+     * @param newValue The new tolerance value.
+     */
+    void setTolerance(float newValue);
 
-    void setDistanceThreshold(float newValue) {
-        distanceThreshold = clamp(newValue, 0.1f, 1000.0f);
-    }
+    /**
+     * @brief Sets the distance threshold.
+     * @param newValue The new distance threshold value.
+     */
+    void setDistanceThreshold(float newValue);
 
-    void performClustering(const std::vector<ObjectPosition>& objects, unsigned int max_iterations = 20) {
-        labels.resize(objects.size(), -1);
+    /**
+     * @brief Performs K-means clustering on the given objects.
+     * @param objects The objects to cluster.
+     * @param max_iterations The maximum number of iterations.
+     */
+    void performClustering(const std::vector<ObjectPosition>& objects, unsigned int max_iterations = 20);
 
-        adjustClusterCount(objects.size());
+    /**
+     * @brief Gets the cluster labels for each object.
+     * @return The cluster labels.
+     */
+    const std::vector<int>& getLabels() const;
 
-        std::vector<AkVector> positions;
-        positions.reserve(objects.size()); // Reserve memory for positions vector
-        for (const auto& obj : objects) {
-            positions.push_back(obj.position);
-        }
-        initializeCentroids(positions);
+    /**
+     * @brief Gets the centroids of the clusters.
+     * @return The centroids.
+     */
+    const std::vector<AkVector>& getCentroids() const;
 
-        clusters.resize(centroids.size());
-
-        for (unsigned int i = 0; i < max_iterations; ++i) {
-            bool changed = assignPointsToClusters(objects);
-            if (!changed || !updateCentroids()) {
-                break;
-            }
-        }
-
-        // Filter out empty clusters
-        std::vector<std::vector<ObjectPosition>> nonEmptyClusters;
-        for (const auto& cluster : clusters) {
-            if (!cluster.empty()) {
-                nonEmptyClusters.push_back(cluster);
-            }
-        }
-        clusters = std::move(nonEmptyClusters);
-
-        // Update centroids to match non-empty clusters
-        std::vector<AkVector> nonEmptyCentroids;
-        for (const auto& cluster : clusters) {
-            AkVector centroid = { 0, 0, 0 };
-            for (const auto& obj : cluster) {
-                centroid.X += obj.position.X;
-                centroid.Y += obj.position.Y;
-                centroid.Z += obj.position.Z;
-            }
-            centroid.X /= cluster.size();
-            centroid.Y /= cluster.size();
-            centroid.Z /= cluster.size();
-            nonEmptyCentroids.push_back(centroid);
-        }
-        centroids = std::move(nonEmptyCentroids);
-    }
-
-
-    const std::vector<int>& getLabels() const {
-        return labels;
-    }
-
-    const std::vector<AkVector>& getCentroids() const {
-        return centroids;
-    }
-
-    std::map<AkTransform, std::vector<AkAudioObjectID>> getClusters() const {
-        std::map<AkTransform, std::vector<AkAudioObjectID>> clusterMap;
-
-        for (const auto& cluster : clusters) {
-            if (!cluster.empty()) {
-                AkVector centroid = { 0, 0, 0 };
-                for (const auto& obj : cluster) {
-                    centroid.X += obj.position.X;
-                    centroid.Y += obj.position.Y;
-                    centroid.Z += obj.position.Z;
-                }
-                centroid.X /= cluster.size();
-                centroid.Y /= cluster.size();
-                centroid.Z /= cluster.size();
-
-                AkTransform centroidTransform;
-                // Orientation must be orthogonal
-                centroidTransform.SetOrientation(AkVector{ 1, 0, 0 }, AkVector{ 0, 1, 0 });
-                centroidTransform.SetPosition(centroid);
-
-                std::vector<AkAudioObjectID> objectIDs;
-                for (const auto& obj : cluster) {
-                    objectIDs.push_back(obj.key);
-                }
-
-                clusterMap[centroidTransform] = std::move(objectIDs);
-            }
-        }
-
-        return clusterMap;
-    }
+    /**
+     * @brief Gets the resulting clusters as a map of transforms to object IDs.
+     * @return The clusters.
+     */
+    std::map<AkTransform, std::vector<AkAudioObjectID>> getClusters() const;
 };
