@@ -26,29 +26,25 @@ the specific language governing permissions and limitations under the License.
 
 #ifndef ObjectClusterFX_H
 #define ObjectClusterFX_H
-#include <vector>
-#include <map>
-#include <algorithm>
-#include <limits>
-#include <cmath>
-#include <cstdlib>
-#include <malloc.h>
 
 #include "ObjectClusterFXParams.h"
 #include <AK/Plugin/PluginServices/AkMixerInputMap.h>
 
+#include <set>
+#include <string>
+#include <unordered_map>
+
 #include "KMeans.h"
-#include "ClusterUtilities.h"
-#include "DSPUtilities.h"
-#include "SharedStructures.h"
+#include "Utilities.h"
 
 
-#define AK_MAX_GENERATED_OBJECTS 128
-
-// The plugin needs to maintain a map of input object keys to generated objects.
-// Placeholder struct will be used later.
-
-using ClusterMap = std::map<AkTransform, std::vector<AkAudioObjectID>>;
+struct GeneratedObject
+{
+	bool isClustered = false;
+	AkAudioObjectID outputObjKey;
+	int index;
+	AK::SpeakerVolumes::MatrixPtr volumeMatrix = nullptr;
+};
 
 class ObjectClusterFX
 	: public AK::IAkOutOfPlaceObjectPlugin
@@ -81,38 +77,35 @@ private:
 	ObjectClusterFXParams* m_pParams;
 	AK::IAkPluginMemAlloc* m_pAllocator;
 	AK::IAkEffectPluginContext* m_pContext;
-	int m_uniqueClusterID;
 
-	KMeans m_kmeans;
-	ClusterUtilities m_clusterUtilities;
-	DSPUtilities m_dspUtilities;
-
-	std::map<AkTransform, std::vector<AkAudioObjectID>> m_clustersData;
-	AkMixerInputMap<AkUInt64, GeneratedObjects> m_mapInObjsToOutObjs;
-
-	// Bookeeping for all Input Objects, uses the AkMixerInputMap to keep track of them.
+	/// Bookeeping for all Input Objects, uses the AkMixerInputMap to keep track of them.
 	void BookkeepAudioObjects(const AkAudioObjects& inObjects);
-	// Utilize the map to write to the input objects to their corresponding output objects.
+	/// Utilize the map to write to the input objects to their corresponding output objects.
 	void WriteToOutput(const AkAudioObjects& inObjects);
-	// Mix the Input object to the output, the method will redirect the mixing
-	// to either use the Wwise API or our custom mixing approach based on an RTPC.
+	/// Mix the Input object to the output, the method will redirect the mixing
+	/// to either use the Wwise API or our custom mixing approach based on an RTPC.
 	void MixInputToOutput(
 		const AkAudioObject* inObject,
 		AkAudioBuffer* inBuffer,
 		AkAudioBuffer* outBuffer,
 		const AkRamp& cumulativeGain,
-		GeneratedObjects* pGeneratedObject
+		GeneratedObject* pGeneratedObject
 	);
-	// Switch Clustering strategies based on the RTPC selection
-	ClusterMap GenerateClusters(const AkAudioObjects& inObjects);
 
-	// Helper function that tries to create unique object IDs
-	AkAudioObjectID ObjectClusterFX::GenerateUniqueID()
-	{
-		m_uniqueClusterID += 1;
-		return m_uniqueClusterID;
-	}
+	/// Populates the KMeans clustering algorithm with positional data from the input objects
+	void PopulateClusters(const AkAudioObjects& inObjects);
 
+	/// Allocates memory for the input speaker volume matrix
+	AKRESULT AllocateVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix, AkUInt32 in_uNumChannelsIn, AkUInt32 in_uNumChannelsOut);
+
+	KMeans m_kmeans;
+	Utilities m_utilities;
+
+	/// Maps that hold KMeans clustering data
+	std::map<AkVector, std::vector<AkAudioObjectID>> m_clusterMap;
+
+	/// Map of inputs (identified with AK::IAkMixerInputContext *) to user-defined blocks of data.
+	AkMixerInputMap<AkUInt64, GeneratedObject> m_mapInObjsToOutObjs;
 };
 
 #endif // ObjectClusterFX_H

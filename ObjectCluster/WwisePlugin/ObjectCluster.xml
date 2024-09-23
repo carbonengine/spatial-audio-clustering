@@ -67,30 +67,6 @@ for the documentation about the plugin xml format
           </ValueRestriction>
         </Restrictions>
       </Property>
-      <Property Name="CCP:useKmeansClustering" DisplayName="Use KMeans Clustering" Type="bool" SupportRTPCType="Exclusive">
-          <DefaultValue>False</DefaultValue>
-          <AudioEnginePropertyID>2</AudioEnginePropertyID>
-          <Restrictions>
-              <ValueRestriction>
-                  <Range Type="bool">
-                      <Min>False</Min>
-                      <Max>True</Max>
-                  </Range>
-              </ValueRestriction>
-          </Restrictions>
-      </Property>
-      <Property Name="CCP:useCustomDSP" DisplayName="Use Custom Mixing DSP" Type="bool" SupportRTPCType="Exclusive">
-          <DefaultValue>False</DefaultValue>
-          <AudioEnginePropertyID>3</AudioEnginePropertyID>
-          <Restrictions>
-              <ValueRestriction>
-                  <Range Type="bool">
-                      <Min>False</Min>
-                      <Max>True</Max>
-                  </Range>
-              </ValueRestriction>
-          </Restrictions>
-      </Property>
     </Properties>
   </EffectPlugin>
 </PluginModule>
