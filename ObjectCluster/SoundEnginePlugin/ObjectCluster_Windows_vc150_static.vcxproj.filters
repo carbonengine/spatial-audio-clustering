@@ -5,15 +5,12 @@
     <ClInclude Include="ObjectClusterFXFactory.h" />
     <ClInclude Include="ObjectClusterFXParams.h" />
     <ClInclude Include="KMeans.h" />
-    <ClInclude Include="ClusterUtilities.h" />
-    <ClInclude Include="DSPUtilities.h" />
-    <ClInclude Include="CustomOperators.h" />
+    <ClInclude Include="Utilities.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ObjectClusterFX.cpp" />
     <ClCompile Include="ObjectClusterFXParams.cpp" />
-    <ClCompile Include="ClusterUtilities.cpp" />
-    <ClCompile Include="DSPUtilities.cpp" />
+    <ClCompile Include="Utilities.cpp" />
     <ClCompile Include="Kmeans.cpp" />
   </ItemGroup>
 </Project>

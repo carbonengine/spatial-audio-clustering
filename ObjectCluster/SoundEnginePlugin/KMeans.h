@@ -8,7 +8,6 @@
 #include <AK/SoundEngine/Common/AkTypes.h>
 #include <AK/SoundEngine/Common/AkCommonDefs.h>
 #include <AK/Plugin/PluginServices/AkMixerInputMap.h>
-#include "CustomOperators.h"
 
 #undef min
 #undef max
@@ -23,6 +22,19 @@
  */
 template <typename T>
 T clamp(T value, T min, T max);
+
+/**
+ * @brief Compares two AkVector objects.
+ *
+ * @param a The first AkVector to compare.
+ * @param b The second AkVector to compare.
+ * @return true if a is considered less than b, false otherwise.
+ */
+inline bool operator<(const AkVector& a, const AkVector& b) {
+    if (a.X != b.X) return a.X < b.X;
+    if (a.Y != b.Y) return a.Y < b.Y;
+    return a.Z < b.Z;
+}
 
 /**
  * @brief Represents a position and key for an audio object.
@@ -66,6 +78,8 @@ private:
     unsigned int maxClusters; ///< Maximum number of clusters.
     std::vector<std::vector<ObjectPosition>> clusters; ///< The resulting clusters.
 
+    std::vector<float> sse_values; /// Sum of squared errors values
+
     /**
      * @brief Determines the maximum number of clusters based on the number of objects.
      * @param numObjects The number of objects to cluster.
@@ -105,6 +119,18 @@ private:
      * @param numObjects The number of objects to cluster.
      */
     void adjustClusterCount(unsigned int numObjects);
+
+    /**
+     * @brief Calculates the Sum of Squared Errors (SSE) for the current clustering.
+     *
+     * The Sum of Squared Errors is a measure of the quality of the clustering. It is calculated
+     * by summing the squared Euclidean distances between each data point and its assigned
+     * centroid. A lower SSE indicates a better clustering result, as it means the data points
+     * are closer to their centroids on average.
+     *
+     * @return The calculated Sum of Squared Errors for the current clustering.
+     */
+    float calculateSSE() const;
 
 public:
     /**
@@ -146,8 +172,8 @@ public:
     const std::vector<AkVector>& getCentroids() const;
 
     /**
-     * @brief Gets the resulting clusters as a map of transforms to object IDs.
+     * @brief Gets the resulting clusters as a map of AkVectors to object IDs.
      * @return The clusters.
      */
-    std::map<AkTransform, std::vector<AkAudioObjectID>> getClusters() const;
+    std::map<AkVector, std::vector<AkAudioObjectID>> getClusters() const;
 };

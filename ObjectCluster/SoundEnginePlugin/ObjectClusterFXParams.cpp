@@ -55,8 +55,7 @@ AKRESULT ObjectClusterFXParams::Init(AK::IAkPluginMemAlloc* in_pAllocator, const
         // Initialize default parameters here
         RTPC.distanceThreshold = 1.0f;
         RTPC.tolerance = 0.0001f;
-        RTPC.useKmeansClustering = true;
-        RTPC.useCustomDSP = false;
+
         m_paramChangeHandler.SetAllParamChanges();
         return AK_Success;
     }
@@ -77,8 +76,6 @@ AKRESULT ObjectClusterFXParams::SetParamsBlock(const void* in_pParamsBlock, AkUI
 
     RTPC.distanceThreshold = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
     RTPC.tolerance = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
-    RTPC.useKmeansClustering = READBANKDATA(bool, pParamsBlock, in_ulBlockSize);
-    RTPC.useCustomDSP = READBANKDATA(bool, pParamsBlock, in_ulBlockSize);
 
     CHECKBANKDATASIZE(in_ulBlockSize, eResult);
     m_paramChangeHandler.SetAllParamChanges();
@@ -101,14 +98,6 @@ AKRESULT ObjectClusterFXParams::SetParam(AkPluginParamID in_paramID, const void*
 		RTPC.tolerance = *((AkReal32*)in_pValue);
 		m_paramChangeHandler.SetParamChange(TOLERANCE);
 		break;
-    case USE_KMEANS_CLUSTERING:
-        RTPC.useKmeansClustering = (*(AkReal32*)(in_pValue)) != 0;
-		m_paramChangeHandler.SetParamChange(USE_KMEANS_CLUSTERING);
-        break;
-    case USE_CUSTOM_DSP:
-        RTPC.useCustomDSP = (*(AkReal32*)(in_pValue)) != 0;
-		m_paramChangeHandler.SetParamChange(USE_CUSTOM_DSP);
-        break;
     default:
         eResult = AK_InvalidParameter;
         break;

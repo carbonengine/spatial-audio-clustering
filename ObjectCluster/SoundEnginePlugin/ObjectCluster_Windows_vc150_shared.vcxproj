@@ -293,7 +293,7 @@
     </ProjectReference>
     <PostBuildEvent>
       <Command>xcopy "$(CCP_EVE_PERFORCE_BRANCH_PATH)\vendor\wwise\2022.1.4.8202\bin\Windows\x64\v141\Profile\ObjectCluster.dll" "$(CCP_EVE_PERFORCE_BRANCH_PATH)\eve\client\bin\x64" /Y
-</Command>
+xcopy "$(CCP_EVE_PERFORCE_BRANCH_PATH)\vendor\wwise\2022.1.4.8202\bin\Windows\x64\v141\Profile\ObjectCluster.dll" "C:\Program Files (x86)\Audiokinetic\Wwise2022.1.4.8202\SDK\x64_vc150\Profile\bin\IntegrationDemo" /Y</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Profile_EnableAsserts|Win32'">

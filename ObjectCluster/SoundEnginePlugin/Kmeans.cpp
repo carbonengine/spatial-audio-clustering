@@ -13,23 +13,23 @@ void KMeans::initializeCentroids(const std::vector<AkVector>& points) {
     std::uniform_int_distribution<int> distribution(0, points.size() - 1);
 
     centroids[0] = points[distribution(generator)];
-    for (size_t i = 1; i < centroids.size(); ++i) {
-        float maxDist = 0;
-        AkVector nextCentroid;
-        for (const auto& point : points) {
-            float minDist = std::numeric_limits<float>::max();
-            for (size_t j = 0; j < i; ++j) {
-                float dist = calculateDistance(point, centroids[j]);
-                if (dist < minDist) {
-                    minDist = dist;
-                }
-            }
-            if (minDist > maxDist) {
-                maxDist = minDist;
-                nextCentroid = point;
+
+    for (size_t k = 1; k < centroids.size(); ++k) {
+        std::vector<float> distances(points.size(), std::numeric_limits<float>::max());
+
+        for (size_t i = 0; i < points.size(); ++i) {
+            for (size_t j = 0; j < k; ++j) {
+                float dist = calculateDistance(points[i], centroids[j]);
+                distances[i] = std::min(distances[i], dist);
             }
         }
-        centroids[i] = nextCentroid;
+
+        for (auto& dist : distances) {
+            dist = dist * dist;
+        }
+
+        std::discrete_distribution<> weighted_distribution(distances.begin(), distances.end());
+        centroids[k] = points[weighted_distribution(generator)];
     }
 }
 
@@ -58,34 +58,31 @@ bool KMeans::assignPointsToClusters(const std::vector<ObjectPosition>& objects) 
         newClusters[closestCentroid].push_back(objects[i]);
     }
 
-    if (changed) {
-        clusters = std::move(newClusters);
-    }
-
+    clusters = std::move(newClusters);
     return changed;
 }
 
 bool KMeans::updateCentroids() {
     if (clusters.empty()) return false;
 
-    std::vector<AkVector> new_centroids(centroids.size(), { 0, 0, 0 });
-    std::vector<int> counts(centroids.size(), 0);
     bool changed = false;
-
     for (size_t i = 0; i < clusters.size(); ++i) {
-        for (const auto& obj : clusters[i]) {
-            new_centroids[i].X += obj.position.X;
-            new_centroids[i].Y += obj.position.Y;
-            new_centroids[i].Z += obj.position.Z;
-            counts[i]++;
-        }
+        if (clusters[i].empty()) continue;
 
-        if (counts[i] > 0) {
-            AkVector new_centroid = { new_centroids[i].X / counts[i], new_centroids[i].Y / counts[i], new_centroids[i].Z / counts[i] };
-            if (calculateDistance(centroids[i], new_centroid) > tolerance * tolerance) {
-                centroids[i] = new_centroid;
-                changed = true;
-            }
+        AkVector new_centroid = { 0, 0, 0 };
+        for (const auto& obj : clusters[i]) {
+            new_centroid.X += obj.position.X;
+            new_centroid.Y += obj.position.Y;
+            new_centroid.Z += obj.position.Z;
+        }
+        new_centroid.X /= clusters[i].size();
+        new_centroid.Y /= clusters[i].size();
+        new_centroid.Z /= clusters[i].size();
+
+        float distance = calculateDistance(centroids[i], new_centroid);
+        if (distance > tolerance) {
+            centroids[i] = new_centroid;
+            changed = true;
         }
     }
 
@@ -98,6 +95,17 @@ void KMeans::adjustClusterCount(unsigned int numObjects) {
     }
     maxClusters = determineMaxClusters(numObjects);
     centroids.resize(maxClusters);
+}
+
+float KMeans::calculateSSE() const
+{
+    float sse = 0.0f;
+    for (size_t i = 0; i < clusters.size(); ++i) {
+        for (const auto& obj : clusters[i]) {
+            sse += std::pow(calculateDistance(obj.position, centroids[i]), 2);
+        }
+    }
+    return sse;
 }
 
 KMeans::KMeans(float tolerance, float distanceThreshold)
@@ -116,7 +124,6 @@ void KMeans::setDistanceThreshold(float newValue) {
 
 void KMeans::performClustering(const std::vector<ObjectPosition>& objects, unsigned int max_iterations) {
     labels.resize(objects.size(), -1);
-
     adjustClusterCount(objects.size());
 
     std::vector<AkVector> positions;
@@ -126,36 +133,32 @@ void KMeans::performClustering(const std::vector<ObjectPosition>& objects, unsig
     }
     initializeCentroids(positions);
 
-    clusters.resize(centroids.size());
-
+    float prev_sse = std::numeric_limits<float>::max();
     for (unsigned int i = 0; i < max_iterations; ++i) {
         bool changed = assignPointsToClusters(objects);
-        if (!changed || !updateCentroids()) {
+        bool centroidsUpdated = updateCentroids();
+
+        float current_sse = calculateSSE();
+        sse_values.push_back(current_sse);
+
+        // Check for convergence
+        if ((!changed && !centroidsUpdated) ||
+            (std::abs(prev_sse - current_sse) < tolerance * prev_sse)) {
             break;
         }
+        prev_sse = current_sse;
     }
 
+    // Filter out empty clusters
     std::vector<std::vector<ObjectPosition>> nonEmptyClusters;
-    for (const auto& cluster : clusters) {
-        if (!cluster.empty()) {
-            nonEmptyClusters.push_back(cluster);
+    std::vector<AkVector> nonEmptyCentroids;
+    for (size_t i = 0; i < clusters.size(); ++i) {
+        if (!clusters[i].empty()) {
+            nonEmptyClusters.push_back(clusters[i]);
+            nonEmptyCentroids.push_back(centroids[i]);
         }
     }
     clusters = std::move(nonEmptyClusters);
-
-    std::vector<AkVector> nonEmptyCentroids;
-    for (const auto& cluster : clusters) {
-        AkVector centroid = { 0, 0, 0 };
-        for (const auto& obj : cluster) {
-            centroid.X += obj.position.X;
-            centroid.Y += obj.position.Y;
-            centroid.Z += obj.position.Z;
-        }
-        centroid.X /= cluster.size();
-        centroid.Y /= cluster.size();
-        centroid.Z /= cluster.size();
-        nonEmptyCentroids.push_back(centroid);
-    }
     centroids = std::move(nonEmptyCentroids);
 }
 
@@ -167,8 +170,8 @@ const std::vector<AkVector>& KMeans::getCentroids() const {
     return centroids;
 }
 
-std::map<AkTransform, std::vector<AkAudioObjectID>> KMeans::getClusters() const {
-    std::map<AkTransform, std::vector<AkAudioObjectID>> clusterMap;
+std::map<AkVector, std::vector<AkAudioObjectID>> KMeans::getClusters() const {
+    std::map<AkVector, std::vector<AkAudioObjectID>> clusterMap;
 
     for (const auto& cluster : clusters) {
         if (!cluster.empty()) {
@@ -182,16 +185,12 @@ std::map<AkTransform, std::vector<AkAudioObjectID>> KMeans::getClusters() const 
             centroid.Y /= cluster.size();
             centroid.Z /= cluster.size();
 
-            AkTransform centroidTransform;
-            centroidTransform.SetOrientation(AkVector{ 1, 0, 0 }, AkVector{ 0, 1, 0 });
-            centroidTransform.SetPosition(centroid);
-
             std::vector<AkAudioObjectID> objectIDs;
             for (const auto& obj : cluster) {
                 objectIDs.push_back(obj.key);
             }
 
-            clusterMap[centroidTransform] = std::move(objectIDs);
+            clusterMap[centroid] = std::move(objectIDs);
         }
     }
 

@@ -793,17 +793,14 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="ClusterUtilities.h" />
-    <ClInclude Include="CustomOperators.h" />
-    <ClInclude Include="DSPUtilities.h" />
+    <ClInclude Include="Utilities.h" />
     <ClInclude Include="KMeans.h" />
     <ClInclude Include="ObjectClusterFX.h" />
     <ClInclude Include="ObjectClusterFXFactory.h" />
     <ClInclude Include="ObjectClusterFXParams.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ClusterUtilities.cpp" />
-    <ClCompile Include="DSPUtilities.cpp" />
+    <ClCompile Include="Utilities.cpp" />
     <ClCompile Include="Kmeans.cpp" />
     <ClCompile Include="ObjectClusterFX.cpp" />
     <ClCompile Include="ObjectClusterFXParams.cpp" />

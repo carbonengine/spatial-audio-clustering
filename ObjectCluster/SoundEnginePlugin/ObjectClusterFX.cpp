@@ -24,16 +24,10 @@ the specific language governing permissions and limitations under the License.
   Copyright (c) 2023 Audiokinetic Inc.
 *******************************************************************************/
 
-#include <set>
-#include <string>
-#include <unordered_map>
 #include "ObjectClusterFX.h"
 #include "../ObjectClusterConfig.h"
-#define NOMINMAX
 #include <AK/AkWwiseSDKVersion.h>
 
-
-#include <cfloat> // For FLT_MAX
 AK::IAkPlugin* CreateObjectClusterFX(AK::IAkPluginMemAlloc* in_pAllocator)
 {
     return AK_PLUGIN_NEW(in_pAllocator, ObjectClusterFX());
@@ -51,7 +45,6 @@ ObjectClusterFX::ObjectClusterFX()
     : m_pParams(nullptr)
     , m_pAllocator(nullptr)
     , m_pContext(nullptr)
-    , m_uniqueClusterID(256)
 {
 }
 
@@ -105,7 +98,7 @@ void ObjectClusterFX::Execute(
 
 void ObjectClusterFX::BookkeepAudioObjects(const AkAudioObjects& inObjects)
 {
-    m_clustersData = GenerateClusters(inObjects);
+    PopulateClusters(inObjects);
 
     // Create a map to track which clusters already have output objects created
     std::unordered_map<int, AkAudioObjectID> clusterOutputObjects;
@@ -115,14 +108,14 @@ void ObjectClusterFX::BookkeepAudioObjects(const AkAudioObjects& inObjects)
         AkAudioObjectID key = inobj->key;
 
         // Find the cluster this object belongs to
-        auto clusterIt = std::find_if(m_clustersData.begin(), m_clustersData.end(),
+        auto clusterIt = std::find_if(m_clusterMap.begin(), m_clusterMap.end(),
             [&key](const auto& pair) {
                 return std::find(pair.second.begin(), pair.second.end(), key) != pair.second.end();
             });
 
-        GeneratedObjects* pEntry = m_mapInObjsToOutObjs.Exists(key);
+        GeneratedObject* pEntry = m_mapInObjsToOutObjs.Exists(key);
 
-        bool isClustered = (clusterIt != m_clustersData.end());
+        bool isClustered = (clusterIt != m_clusterMap.end());
 
         if (pEntry) {
             // If the entry already exists, update the index
@@ -137,14 +130,14 @@ void ObjectClusterFX::BookkeepAudioObjects(const AkAudioObjects& inObjects)
 
                 if (isClustered) {
                     // Get the cluster index
-                    int clusterIndex = std::distance(m_clustersData.begin(), clusterIt);
+                    int clusterIndex = std::distance(m_clusterMap.begin(), clusterIt);
 
                     // Check if an output object has already been created for this cluster
                     auto outputObjIt = clusterOutputObjects.find(clusterIndex);
 
                     if (outputObjIt == clusterOutputObjects.end()) {
                         // This is the first object in the cluster, so create a new output object
-                        outputObjKey = m_dspUtilities.CreateOutputObject(inobj, inObjects, i, m_pContext);
+                        outputObjKey = m_utilities.CreateOutputObject(inobj, inObjects, i, m_pContext, &clusterIt->first);
 
                         // Store the output object ID for this cluster
                         clusterOutputObjects[clusterIndex] = outputObjKey;
@@ -154,20 +147,18 @@ void ObjectClusterFX::BookkeepAudioObjects(const AkAudioObjects& inObjects)
                         outputObjKey = outputObjIt->second;
                     }
 
-				    pEntry->uniqueClusterID = GenerateUniqueID();
                     pEntry->outputObjKey = outputObjKey;
                     pEntry->isClustered = true;
                 }
                 else {
                     // If not clustered, create a unique output object
-                    outputObjKey = m_dspUtilities.CreateOutputObject(inobj, inObjects, i, m_pContext);
+                    outputObjKey = m_utilities.CreateOutputObject(inobj, inObjects, i, m_pContext, nullptr);
 
                     if (outputObjKey != AK_INVALID_AUDIO_OBJECT_ID) {
                         pEntry->outputObjKey = outputObjKey;
                         pEntry->isClustered = false;
                     }
                 }
-
                 // Update the index for future reference
                 pEntry->index = i;
             }
@@ -176,9 +167,7 @@ void ObjectClusterFX::BookkeepAudioObjects(const AkAudioObjects& inObjects)
 }
 
 void ObjectClusterFX::WriteToOutput(const AkAudioObjects& inObjects)
-{
-    std::set<AkAudioObjectID> visitedClusters;
-  
+{ 
     AkAudioObjects outputObjects;
     outputObjects.uNumObjects = 0;
     outputObjects.ppObjectBuffers = nullptr;
@@ -193,10 +182,10 @@ void ObjectClusterFX::WriteToOutput(const AkAudioObjects& inObjects)
         outputObjects.ppObjects = objectsOut;
         m_pContext->GetOutputObjects(outputObjects);
 
-        m_dspUtilities.ClearBuffers(outputObjects);
+        m_utilities.ClearBuffers(outputObjects);
 
         // Iterate through our internal map.
-        AkMixerInputMap<AkAudioObjectID, GeneratedObjects>::Iterator it = m_mapInObjsToOutObjs.Begin();
+        AkMixerInputMap<AkAudioObjectID,GeneratedObject>::Iterator it = m_mapInObjsToOutObjs.Begin();
         while (it != m_mapInObjsToOutObjs.End())
         {
             // Has the input object been passed to Execute?
@@ -223,31 +212,49 @@ void ObjectClusterFX::WriteToOutput(const AkAudioObjects& inObjects)
 
                 if (pObjOut)
                 {
-                    if ((*it).pUserData->isClustered != true)
-                    {
-                        // If not clustered, simply copy the input to the output.
-                        m_dspUtilities.CopyBuffer(inbuf, pBufferOut);
-
-                        // Also, propagate the associated input object's custom metadata to the output.
-                        std::string objName = "Not clustered";
-                        pObjOut->SetName(m_pAllocator, objName.c_str());
-                        pBufferOut->uValidFrames = inbuf->uValidFrames;
-                    }
-                    else
+                    if ((*it).pUserData->isClustered == true)
                     {
                         MixInputToOutput(inObj, inbuf, pBufferOut, inObj->cumulativeGain, (*it).pUserData);
 
-                        // Copy state.
-                        std::string objName = std::to_string((*it).pUserData->uniqueClusterID);
+                        // Find the the current cluster
+                        AkAudioObjectID inputKey = inObj->key;
+                        auto clusterIt = std::find_if(m_clusterMap.begin(), m_clusterMap.end(),
+                            [&inputKey](const auto& pair) {
+                                return std::find(pair.second.begin(), pair.second.end(), inputKey) != pair.second.end();
+                            });
+
+                        if (clusterIt != m_clusterMap.end())
+                        {
+                            // Use the centroid position
+                            pObjOut->positioning.threeD.xform.SetPosition(clusterIt->first);
+
+                            // Set the buffer's state
+                            pBufferOut->eState = inbuf->eState != AK_NoMoreData ? inbuf->eState : AK_NoMoreData;
+
+                            std::string objID = std::to_string((*it).pUserData->outputObjKey);
+                            std::string objName = "Cluster" + objID;
+                            pObjOut->SetName(m_pAllocator, objName.c_str());
+                        }
+
+                    }
+                    else
+                    {
+                        // If not clustered, simply copy the input to the output.
+                        m_utilities.CopyBuffer(inbuf, pBufferOut);
+
+                        // Set the input object's position and state
+                        pObjOut->positioning.threeD.xform.SetPosition(inObj->positioning.threeD.xform.Position());
+                        pBufferOut->eState = inbuf->eState;
+
+                        // Also, propagate the associated input object's custom metadata to the output.
+                        pObjOut->arCustomMetadata.Copy(inObj->arCustomMetadata);
+
+                        std::string objName = "Not clustered";
                         pObjOut->SetName(m_pAllocator, objName.c_str());
-                        pBufferOut->uValidFrames = inbuf->MaxFrames();
                     }
 
+                    pBufferOut->uValidFrames = inbuf->uValidFrames;
 
-                    // Set output buffer state to indicate that it contains data.
-                    pBufferOut->eState = inbuf->eState != AK_NoMoreData ? inbuf->eState : AK_NoMoreData;
-                    // Also, propagate the associated input object's custom metadata to the output.
-                    pObjOut->arCustomMetadata.Copy(inObj->arCustomMetadata);
                 }
                 (*it).pUserData->index = -1;    // "clear" index for next frame.
                 ++it;
@@ -259,19 +266,18 @@ void ObjectClusterFX::WriteToOutput(const AkAudioObjects& inObjects)
             }
         }
     }
-
-
 }
 
-void ObjectClusterFX::MixInputToOutput(const AkAudioObject* inObject, AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, GeneratedObjects* pGeneratedObject)
+void ObjectClusterFX::MixInputToOutput(const AkAudioObject* inObject, AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, GeneratedObject* pGeneratedObject)
 {
     if (inBuffer->uValidFrames == 0 || inBuffer->NumChannels() == 0 || outBuffer->NumChannels() == 0) {
         return;
     }
 
     AkUInt32 uTransmixSize = AK::SpeakerVolumes::Matrix::GetRequiredSize(inBuffer->NumChannels(), outBuffer->NumChannels());
+
     AK::SpeakerVolumes::MatrixPtr currentVolumes = (AK::SpeakerVolumes::MatrixPtr)AkAllocaSIMD(uTransmixSize);
-    //AK::SpeakerVolumes::Matrix::Zero(mx, inBuffer->NumChannels(), outBuffer->NumChannels());
+    AK::SpeakerVolumes::Matrix::Zero(currentVolumes, inBuffer->NumChannels(), outBuffer->NumChannels());
 
     AKRESULT result = m_pContext->GetMixerCtx()->ComputePositioning(
         inObject->positioning,
@@ -280,23 +286,58 @@ void ObjectClusterFX::MixInputToOutput(const AkAudioObject* inObject, AkAudioBuf
         currentVolumes
     );
 
-    if (m_pParams->RTPC.useCustomDSP)
-    {
-        m_dspUtilities.ApplyCustomMix(inBuffer, outBuffer, cumulativeGain, currentVolumes);
+    // If mixVolumes doesn't exist, allocate and set it to the current volumes
+    if (pGeneratedObject->volumeMatrix == nullptr) {
+        AKRESULT eResult = AllocateVolumes(pGeneratedObject->volumeMatrix, inBuffer->NumChannels(), outBuffer->NumChannels());
+        if (eResult == AK_Success) {
+            AKPLATFORM::AkMemCpy(pGeneratedObject->volumeMatrix, currentVolumes, uTransmixSize);
+        }
     }
-    else
-    {
-        m_dspUtilities.ApplyWwiseMix(inBuffer, outBuffer, cumulativeGain, currentVolumes, pGeneratedObject, m_pContext);
 
+    AK_GET_PLUGIN_SERVICE_MIXER(m_pContext->GlobalContext())->MixNinNChannels(
+        inBuffer,
+        outBuffer,
+        cumulativeGain.fPrev,
+        cumulativeGain.fNext,
+        pGeneratedObject->volumeMatrix,
+        currentVolumes
+    );
+
+    // Update stored volumes
+    AKPLATFORM::AkMemCpy(pGeneratedObject->volumeMatrix, currentVolumes, uTransmixSize);
+}
+
+void ObjectClusterFX::PopulateClusters(const AkAudioObjects& inObjects)
+{
+    std::vector<ObjectPosition> objectPositions;
+    objectPositions.reserve(inObjects.uNumObjects);
+
+    for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i) {
+        AkAudioObject* inobj = inObjects.ppObjects[i];
+
+        // Only 3D objects should be clustered.
+        if (inobj->positioning.behavioral.spatMode != AK_SpatializationMode_None)
+        {
+            objectPositions.push_back({ inobj->positioning.threeD.xform.Position(), inobj->key });
+        }
+    }
+
+    // Perform clustering only if there are objects
+    m_clusterMap.clear();
+    if (!objectPositions.empty()) {
+        m_kmeans.performClustering(objectPositions);
+        // Return cluster data
+        m_clusterMap = m_kmeans.getClusters();
     }
 }
 
-ClusterMap ObjectClusterFX::GenerateClusters(const AkAudioObjects& inObjects)
+AKRESULT ObjectClusterFX::AllocateVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix, AkUInt32 in_uNumChannelsIn, AkUInt32 in_uNumChannelsOut)
 {
-    // Update the parameters for the KMeans algorithm
-    m_clusterUtilities.UpdateKMeansParams(m_pParams);
-
-    return m_pParams->RTPC.useKmeansClustering
-        ? m_clusterUtilities.GenerateKmeansClusters(inObjects)
-        : m_clusterUtilities.GeneratePositionalClusters(inObjects);
+    AkUInt32 size = AK::SpeakerVolumes::Matrix::GetRequiredSize(in_uNumChannelsIn, in_uNumChannelsOut);
+    volumeMatrix = (AK::SpeakerVolumes::MatrixPtr)m_pAllocator->Malloc(
+        size,
+        __FILE__,
+        __LINE__
+    );
+    return volumeMatrix ? AK_Success : AK_InsufficientMemory;
 }
