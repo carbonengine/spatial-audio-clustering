@@ -24,22 +24,21 @@ void KMeans::initializeCentroids(const std::vector<AkVector>& points) {
             }
         }
 
-        for (auto& dist : distances) {
-            dist = dist * dist;
-        }
-
         std::discrete_distribution<> weighted_distribution(distances.begin(), distances.end());
         centroids[k] = points[weighted_distribution(generator)];
     }
 }
 
 float KMeans::calculateDistance(const AkVector& a, const AkVector& b) const {
-    return (a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z);
+    return std::sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z));
 }
+
+
 
 bool KMeans::assignPointsToClusters(const std::vector<ObjectPosition>& objects) {
     bool changed = false;
     std::vector<std::vector<ObjectPosition>> newClusters(centroids.size());
+    std::vector<ObjectPosition> unassignedPoints;
 
     for (size_t i = 0; i < objects.size(); ++i) {
         float minDistance = std::numeric_limits<float>::max();
@@ -51,16 +50,34 @@ bool KMeans::assignPointsToClusters(const std::vector<ObjectPosition>& objects) 
                 closestCentroid = j;
             }
         }
-        if (labels[i] != closestCentroid) {
-            labels[i] = closestCentroid;
+
+        if (minDistance <= distanceThreshold) {
+            // The point is within the distance threshold of a centroid
+            if (labels[i] != closestCentroid) {
+                labels[i] = closestCentroid;
+                changed = true;
+            }
+            newClusters[closestCentroid].push_back(objects[i]);
+        }
+        else {
+            // The point is too far from all centroids
+            labels[i] = -1;
+            unassignedPoints.push_back(objects[i]);
             changed = true;
         }
-        newClusters[closestCentroid].push_back(objects[i]);
     }
 
     clusters = std::move(newClusters);
+
+    // Handle unassigned points
+    if (!unassignedPoints.empty()) {
+        clusters.push_back(std::move(unassignedPoints));
+        centroids.push_back(calculateCentroid(clusters.back()));
+    }
+
     return changed;
 }
+
 
 bool KMeans::updateCentroids() {
     if (clusters.empty()) return false;
@@ -97,15 +114,32 @@ void KMeans::adjustClusterCount(unsigned int numObjects) {
     centroids.resize(maxClusters);
 }
 
-float KMeans::calculateSSE() const
-{
+float KMeans::calculateSSE() const {
     float sse = 0.0f;
     for (size_t i = 0; i < clusters.size(); ++i) {
         for (const auto& obj : clusters[i]) {
-            sse += std::pow(calculateDistance(obj.position, centroids[i]), 2);
+            float distance = calculateDistance(obj.position, centroids[i]);
+            sse += distance * distance;  // Still square here as SSE is defined with squared distances
         }
     }
     return sse;
+}
+AkVector KMeans::calculateCentroid(const std::vector<ObjectPosition>& cluster)
+{
+    AkVector centroid = { 0, 0, 0 };
+    if (cluster.empty()) return centroid;
+
+    for (const auto& obj : cluster) {
+        centroid.X += obj.position.X;
+        centroid.Y += obj.position.Y;
+        centroid.Z += obj.position.Z;
+    }
+
+    centroid.X /= cluster.size();
+    centroid.Y /= cluster.size();
+    centroid.Z /= cluster.size();
+
+    return centroid;
 }
 
 KMeans::KMeans(float tolerance, float distanceThreshold)
@@ -133,8 +167,7 @@ void KMeans::performClustering(const std::vector<ObjectPosition>& objects, unsig
     }
     initializeCentroids(positions);
 
-    float prev_sse = std::numeric_limits<float>::max();
-    for (unsigned int i = 0; i < max_iterations; ++i) {
+    for (unsigned int iter = 0; iter < max_iterations; ++iter) {
         bool changed = assignPointsToClusters(objects);
         bool centroidsUpdated = updateCentroids();
 
@@ -143,10 +176,9 @@ void KMeans::performClustering(const std::vector<ObjectPosition>& objects, unsig
 
         // Check for convergence
         if ((!changed && !centroidsUpdated) ||
-            (std::abs(prev_sse - current_sse) < tolerance * prev_sse)) {
+            (iter > 0 && std::abs(sse_values[iter] - sse_values[iter - 1]) < tolerance * sse_values[iter - 1])) {
             break;
         }
-        prev_sse = current_sse;
     }
 
     // Filter out empty clusters

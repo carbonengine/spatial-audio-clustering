@@ -322,6 +322,10 @@ void ObjectClusterFX::PopulateClusters(const AkAudioObjects& inObjects)
         }
     }
 
+    // Update Kmeans parameters
+    m_kmeans.setDistanceThreshold(m_pParams->RTPC.distanceThreshold);
+    m_kmeans.setTolerance(m_pParams->RTPC.tolerance);
+
     // Perform clustering only if there are objects
     m_clusterMap.clear();
     if (!objectPositions.empty()) {

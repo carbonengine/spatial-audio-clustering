@@ -132,6 +132,19 @@ private:
      */
     float calculateSSE() const;
 
+    /**
+     * @brief Calculates the centroid of a cluster of object positions.
+     *
+     * This function computes the average position (centroid) of all objects in a given cluster.
+     * If the cluster is empty, it returns a zero vector.
+     *
+     * @param cluster A vector of ObjectPosition representing a cluster of objects.
+     * @return AkVector The calculated centroid of the cluster.
+     *
+     */
+
+    AkVector calculateCentroid(const std::vector<ObjectPosition>& cluster);
+
 public:
     /**
      * @brief Constructs a KMeans instance.
