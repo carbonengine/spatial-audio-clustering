@@ -129,6 +129,10 @@ void ObjectClusterFX::BookkeepAudioObjects(const AkAudioObjects& inObjects)
                 AkAudioObjectID outputObjKey;
 
                 if (isClustered) {
+
+                    // Calculate and store the offset from original position to cluster centroid
+                    pEntry->offset = clusterIt->first - inobj->positioning.threeD.xform.Position();
+
                     // Get the cluster index
                     int clusterIndex = std::distance(m_clusterMap.begin(), clusterIt);
 
@@ -151,6 +155,7 @@ void ObjectClusterFX::BookkeepAudioObjects(const AkAudioObjects& inObjects)
                     pEntry->isClustered = true;
                 }
                 else {
+                    pEntry->offset.Zero();
                     // If not clustered, create a unique output object
                     outputObjKey = m_utilities.CreateOutputObject(inobj, inObjects, i, m_pContext, nullptr);
 
@@ -225,8 +230,10 @@ void ObjectClusterFX::WriteToOutput(const AkAudioObjects& inObjects)
 
                         if (clusterIt != m_clusterMap.end())
                         {
-                            // Use the centroid position
-                            pObjOut->positioning.threeD.xform.SetPosition(clusterIt->first);
+                            // Set the output object's position
+                            AkVector currentPos = inObj->positioning.threeD.xform.Position();
+                            AkVector newPos = currentPos + (*it).pUserData->offset;
+                            pObjOut->positioning.threeD.xform.SetPosition(newPos);
 
                             // Set the buffer's state
                             pBufferOut->eState = inbuf->eState != AK_NoMoreData ? inbuf->eState : AK_NoMoreData;
