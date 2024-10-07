@@ -33,8 +33,6 @@ float KMeans::calculateDistance(const AkVector& a, const AkVector& b) const {
     return std::sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z));
 }
 
-
-
 bool KMeans::assignPointsToClusters(const std::vector<ObjectPosition>& objects) {
     bool changed = false;
     std::vector<std::vector<ObjectPosition>> newClusters(centroids.size());
@@ -77,7 +75,6 @@ bool KMeans::assignPointsToClusters(const std::vector<ObjectPosition>& objects) 
 
     return changed;
 }
-
 
 bool KMeans::updateCentroids() {
     if (clusters.empty()) return false;
@@ -124,6 +121,7 @@ float KMeans::calculateSSE() const {
     }
     return sse;
 }
+
 AkVector KMeans::calculateCentroid(const std::vector<ObjectPosition>& cluster)
 {
     AkVector centroid = { 0, 0, 0 };
@@ -134,7 +132,6 @@ AkVector KMeans::calculateCentroid(const std::vector<ObjectPosition>& cluster)
         centroid.Y += obj.position.Y;
         centroid.Z += obj.position.Z;
     }
-
     centroid.X /= cluster.size();
     centroid.Y /= cluster.size();
     centroid.Z /= cluster.size();

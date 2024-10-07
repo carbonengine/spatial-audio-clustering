@@ -44,6 +44,7 @@ struct GeneratedObject
 	AkAudioObjectID outputObjKey;
 	int index;
 	AK::SpeakerVolumes::MatrixPtr volumeMatrix = nullptr;
+	AkVector offset;
 };
 
 class ObjectClusterFX
