@@ -39,6 +39,7 @@ Plugin.authoring = {}
 -- SDK STATIC PLUGIN SECTION
 Plugin.sdk.static.includedirs = -- https://github.com/premake/premake-core/wiki/includedirs
 {
+   os.getenv("WWISESDK") .. "/include"
 }
 Plugin.sdk.static.files = -- https://github.com/premake/premake-core/wiki/files
 {
@@ -65,6 +66,7 @@ Plugin.sdk.static.defines = -- https://github.com/premake/premake-core/wiki/defi
 -- SDK SHARED PLUGIN SECTION
 Plugin.sdk.shared.includedirs =
 {
+   os.getenv("WWISESDK") .. "/include"
 }
 Plugin.sdk.shared.files =
 {
@@ -87,6 +89,7 @@ Plugin.sdk.shared.defines =
 -- AUTHORING PLUGIN SECTION
 Plugin.authoring.includedirs =
 {
+   os.getenv("WWISESDK") .. "/include"
 }
 Plugin.authoring.files =
 {
@@ -110,5 +113,16 @@ Plugin.authoring.libdirs =
 Plugin.authoring.defines =
 {
 }
+
+if os.getenv("CUSTOM_WWISE_PLUGIN_DLL_PATH") then 
+    Plugin.sdk.shared.custom = function()
+        postbuildcommands
+        {
+            "{ECHO} Copying DLLs to $(CUSTOM_WWISE_PLUGIN_DLL_PATH)...",
+            "{MKDIR} $(CUSTOM_WWISE_PLUGIN_DLL_PATH)\\$(TargetPlatformIdentifier)\\$(Platform)\\$(PlatformToolset)\\$(Configuration)\\",
+            "{COPYFILE} %{cfg.buildtarget.abspath} $(CUSTOM_WWISE_PLUGIN_DLL_PATH)\\$(TargetPlatformIdentifier)\\$(Platform)\\$(PlatformToolset)\\$(Configuration)\\"
+        }
+    end
+end
 
 return Plugin
