@@ -77,8 +77,14 @@ private:
     std::vector<int> labels; ///< Labels assigning each point to a cluster.
     unsigned int maxClusters; ///< Maximum number of clusters.
     std::vector<std::vector<ObjectPosition>> clusters; ///< The resulting clusters.
-
     std::vector<float> sse_values; /// Sum of squared errors values
+    std::vector<ObjectPosition> unassignedPoints; /// A vector for unassigned points.
+
+
+
+    const std::vector<ObjectPosition>& KMeans::getUnassignedPoints() const {
+        return unassignedPoints;
+    }
 
     /**
      * @brief Determines the maximum number of clusters based on the number of objects.
@@ -91,7 +97,7 @@ private:
      * @brief Initializes the centroids for the K-means algorithm.
      * @param points The points to initialize centroids from.
      */
-    void initializeCentroids(const std::vector<AkVector>& points);
+    void initializeCentroids(const std::vector<ObjectPosition>& objects);
 
     /**
      * @brief Calculates the squared distance between two points.
@@ -144,6 +150,15 @@ private:
      */
 
     AkVector calculateCentroid(const std::vector<ObjectPosition>& cluster);
+
+    /**
+     * @brief Adjusts the number and composition of clusters based on the distance threshold.
+     *
+     * This method performs the following operations:
+     * 1. Removes empty clusters to optimize cluster count.
+     * 2. Attempts to create new clusters from unassigned points, respecting the distance threshold.
+    */
+    void adjustClusterCount();
 
 public:
     /**
