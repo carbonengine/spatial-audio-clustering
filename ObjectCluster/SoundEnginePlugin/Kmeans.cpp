@@ -8,24 +8,36 @@ unsigned int KMeans::determineMaxClusters(unsigned int numObjects) {
     return static_cast<unsigned int>(std::sqrt(numObjects));
 }
 
-void KMeans::initializeCentroids(const std::vector<AkVector>& points) {
+void KMeans::initializeCentroids(const std::vector<ObjectPosition>& objects) {
     std::default_random_engine generator(seed);
-    std::uniform_int_distribution<int> distribution(0, points.size() - 1);
+    std::uniform_int_distribution<int> distribution(0, objects.size() - 1);
 
-    centroids[0] = points[distribution(generator)];
+    centroids.clear();
+    for (unsigned int i = 0; i < maxClusters; ++i) {
+        bool validCentroid = false;
+        int attempts = 0;
+        while (!validCentroid && attempts < 100) {
+            int index = distribution(generator);
+            const AkVector& candidate = objects[index].position;
 
-    for (size_t k = 1; k < centroids.size(); ++k) {
-        std::vector<float> distances(points.size(), std::numeric_limits<float>::max());
-
-        for (size_t i = 0; i < points.size(); ++i) {
-            for (size_t j = 0; j < k; ++j) {
-                float dist = calculateDistance(points[i], centroids[j]);
-                distances[i] = std::min(distances[i], dist);
+            validCentroid = true;
+            for (const AkVector& existingCentroid : centroids) {
+                if (calculateDistance(candidate, existingCentroid) < distanceThreshold) {
+                    validCentroid = false;
+                    break;
+                }
             }
+
+            if (validCentroid) {
+                centroids.push_back(candidate);
+            }
+
+            attempts++;
         }
 
-        std::discrete_distribution<> weighted_distribution(distances.begin(), distances.end());
-        centroids[k] = points[weighted_distribution(generator)];
+        if (!validCentroid) {
+            break;  // Stop if we can't find a valid centroid
+        }
     }
 }
 
@@ -36,7 +48,7 @@ float KMeans::calculateDistance(const AkVector& a, const AkVector& b) const {
 bool KMeans::assignPointsToClusters(const std::vector<ObjectPosition>& objects) {
     bool changed = false;
     std::vector<std::vector<ObjectPosition>> newClusters(centroids.size());
-    std::vector<ObjectPosition> unassignedPoints;
+    unassignedPoints.clear();  // Clear previous unassigned points
 
     for (size_t i = 0; i < objects.size(); ++i) {
         float minDistance = std::numeric_limits<float>::max();
@@ -66,14 +78,42 @@ bool KMeans::assignPointsToClusters(const std::vector<ObjectPosition>& objects) 
     }
 
     clusters = std::move(newClusters);
-
-    // Handle unassigned points
-    if (!unassignedPoints.empty()) {
-        clusters.push_back(std::move(unassignedPoints));
-        centroids.push_back(calculateCentroid(clusters.back()));
-    }
-
     return changed;
+}
+
+void KMeans::adjustClusterCount() {
+    // Remove empty clusters
+    auto it = std::remove_if(clusters.begin(), clusters.end(),
+        [](const std::vector<ObjectPosition>& cluster) { return cluster.empty(); });
+    clusters.erase(it, clusters.end());
+
+    // Remove corresponding centroids
+    centroids.resize(clusters.size());
+
+    // Try to create new clusters from unassigned points
+    while (!unassignedPoints.empty() && clusters.size() < maxClusters) {
+        AkVector newCentroid = unassignedPoints[0].position;
+        std::vector<ObjectPosition> newCluster;
+
+        auto unassignedIt = unassignedPoints.begin();
+        while (unassignedIt != unassignedPoints.end()) {
+            if (calculateDistance(unassignedIt->position, newCentroid) <= distanceThreshold) {
+                newCluster.push_back(*unassignedIt);
+                unassignedIt = unassignedPoints.erase(unassignedIt);
+            }
+            else {
+                ++unassignedIt;
+            }
+        }
+
+        if (!newCluster.empty()) {
+            clusters.push_back(std::move(newCluster));
+            centroids.push_back(newCentroid);
+        }
+        else {
+            break;  // No more clusters can be formed
+        }
+    }
 }
 
 bool KMeans::updateCentroids() {
@@ -155,19 +195,22 @@ void KMeans::setDistanceThreshold(float newValue) {
 
 void KMeans::performClustering(const std::vector<ObjectPosition>& objects, unsigned int max_iterations) {
     labels.resize(objects.size(), -1);
-    adjustClusterCount(objects.size());
+    maxClusters = determineMaxClusters(objects.size());
 
-    std::vector<AkVector> positions;
-    positions.reserve(objects.size());
-    for (const auto& obj : objects) {
-        positions.push_back(obj.position);
-    }
-    initializeCentroids(positions);
+    // Initialize centroids
+    initializeCentroids(objects);
 
     for (unsigned int iter = 0; iter < max_iterations; ++iter) {
+        // Assign points to clusters
         bool changed = assignPointsToClusters(objects);
+
+        // Adjust cluster count based on unassigned points
+        adjustClusterCount();
+
+        // Update centroids
         bool centroidsUpdated = updateCentroids();
 
+        // Calculate SSE
         float current_sse = calculateSSE();
         sse_values.push_back(current_sse);
 
@@ -178,17 +221,8 @@ void KMeans::performClustering(const std::vector<ObjectPosition>& objects, unsig
         }
     }
 
-    // Filter out empty clusters
-    std::vector<std::vector<ObjectPosition>> nonEmptyClusters;
-    std::vector<AkVector> nonEmptyCentroids;
-    for (size_t i = 0; i < clusters.size(); ++i) {
-        if (!clusters[i].empty()) {
-            nonEmptyClusters.push_back(clusters[i]);
-            nonEmptyCentroids.push_back(centroids[i]);
-        }
-    }
-    clusters = std::move(nonEmptyClusters);
-    centroids = std::move(nonEmptyCentroids);
+    // Final adjustment of cluster count
+    adjustClusterCount();
 }
 
 const std::vector<int>& KMeans::getLabels() const {

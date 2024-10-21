@@ -1,6 +1,7 @@
 # ccp-wwise-audio-plugins
 This repository contains custom audio plugins for Wwise, developed by CCP.
 
+See the Readme's in a particular plugins subfolder for more info on what each one does.
 
 ## Quick Set-Up Guide
 
