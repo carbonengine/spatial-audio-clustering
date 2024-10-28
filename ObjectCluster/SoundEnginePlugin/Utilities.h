@@ -45,4 +45,12 @@ public:
      * @return The ID of the created output audio object.
      */
     AkAudioObjectID CreateOutputObject(const AkAudioObject* inobj, const AkAudioObjects& inObjects, const AkUInt32 index, AK::IAkEffectPluginContext* m_pContext, const AkVector* clusterPosition);
+
+    /**
+      * @brief Calculates the squared distance between two 3D vectors
+      * @param v1 First vector
+      * @param v2 Second vector
+      * @return The squared Euclidean distance between the vectors
+      */
+    float GetDistanceSquared(const AkVector& v1, const AkVector& v2);
 };

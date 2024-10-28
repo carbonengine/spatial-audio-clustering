@@ -59,4 +59,12 @@ AkAudioObjectID Utilities::CreateOutputObject(const AkAudioObject* inobj, const 
     return outputObjKey;
 }
 
+float Utilities::GetDistanceSquared(const AkVector& v1, const AkVector& v2)
+{
+    float dx = v1.X - v2.X;
+    float dy = v1.Y - v2.Y;
+    float dz = v1.Z - v2.Z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
 
