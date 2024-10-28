@@ -45,6 +45,14 @@ struct GeneratedObject
 	int index;
 	AK::SpeakerVolumes::MatrixPtr volumeMatrix = nullptr;
 	AkVector offset;
+	AkVector currentPosition;
+};
+
+struct ClusterState {
+	bool hasActiveInput = false;
+	AkUInt32 activeInputCount = 0;
+	AkUInt32 totalInputCount = 0;
+	AkUInt16 maxFrames = 0;
 };
 
 class ObjectClusterFX
@@ -74,6 +82,8 @@ public:
 		const AkAudioObjects& outObjects	///< Output objects and object audio buffers.
 		) override;
 
+
+
 private:
 	ObjectClusterFXParams* m_pParams;
 	AK::IAkPluginMemAlloc* m_pAllocator;
@@ -82,7 +92,7 @@ private:
 	/// Bookeeping for all Input Objects, uses the AkMixerInputMap to keep track of them.
 	void BookkeepAudioObjects(const AkAudioObjects& inObjects);
 	/// Utilize the map to write to the input objects to their corresponding output objects.
-	void WriteToOutput(const AkAudioObjects& inObjects);
+	void ProcessAudioObjects(const AkAudioObjects& inObjects);
 	/// Mix the Input object to the output, the method will redirect the mixing
 	/// to either use the Wwise API or our custom mixing approach based on an RTPC.
 	void MixInputToOutput(
@@ -93,20 +103,51 @@ private:
 		GeneratedObject* pGeneratedObject
 	);
 
+	void ProcessClusteredObject(
+		const AkAudioObject* inObj,
+		AkAudioBuffer* inBuf,
+		AkAudioObject* outObj,
+		AkAudioBuffer* outBuf,
+		GeneratedObject* userData,
+		const ClusterState& clusterState);
+
+
+	void ProcessUnclustered(
+		const AkAudioObject* inObj,
+		AkAudioBuffer* inBuf,
+		AkAudioObject* outObj,
+		AkAudioBuffer* outBuf);
+
 	/// Populates the KMeans clustering algorithm with positional data from the input objects
 	void PopulateClusters(const AkAudioObjects& inObjects);
+
+	AkAudioObjects GetCurrentOutputObjects();
+
+	std::unordered_map<AkAudioObjectID, ClusterState> ReadClusterStates(const AkAudioObjects& inObjects);
 
 	/// Allocates memory for the input speaker volume matrix
 	AKRESULT AllocateVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix, AkUInt32 in_uNumChannelsIn, AkUInt32 in_uNumChannelsOut);
 
-	KMeans m_kmeans;
-	Utilities m_utilities;
+	std::unique_ptr<KMeans> m_kmeans;
+	std::unique_ptr<Utilities> m_utilities;
+
+	std::vector<AkAudioBuffer*> m_tempBuffers;
+	std::vector<AkAudioObject*> m_tempObjects;
+
+	std::vector<AkAudioObjectID> m_activeClusters;
 
 	/// Maps that hold KMeans clustering data
 	std::map<AkVector, std::vector<AkAudioObjectID>> m_clusterMap;
 
-	/// Map of inputs (identified with AK::IAkMixerInputContext *) to user-defined blocks of data.
 	AkMixerInputMap<AkUInt64, GeneratedObject> m_mapInObjsToOutObjs;
+
+
+	void ObjectClusterFX::FreeVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix) {
+		if (volumeMatrix) {
+			m_pAllocator->Free(volumeMatrix);
+			volumeMatrix = nullptr;
+		}
+	}
 };
 
 #endif // ObjectClusterFX_H
