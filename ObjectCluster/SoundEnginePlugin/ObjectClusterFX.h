@@ -142,12 +142,12 @@ private:
 	AkMixerInputMap<AkUInt64, GeneratedObject> m_mapInObjsToOutObjs;
 
 
-	void ObjectClusterFX::FreeVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix) {
-		if (volumeMatrix) {
-			m_pAllocator->Free(volumeMatrix);
-			volumeMatrix = nullptr;
-		}
-	}
+	void ObjectClusterFX::FreeVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix);
+
+	AKRESULT ObjectClusterFX::FindBestCluster(
+		const AkVector& position,
+		const AkAudioObjects& existingOutputs,
+		AkAudioObjectID& outClusterKey);
 };
 
 #endif // ObjectClusterFX_H
