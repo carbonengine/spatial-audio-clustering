@@ -106,7 +106,7 @@ void ObjectClusterFX::BookkeepAudioObjects(const AkAudioObjects& inObjects)
 {
     PopulateClusters(inObjects);
 
-    // Get existing outputs once at the beginning to avoid repeated calls
+    // Get existing outputs once at the beginning
     AkAudioObjects existingOutputs = { 0 };
     if (!m_mapInObjsToOutObjs.IsEmpty()) {
         existingOutputs = GetCurrentOutputObjects();
@@ -137,42 +137,21 @@ void ObjectClusterFX::BookkeepAudioObjects(const AkAudioObjects& inObjects)
         pEntry = m_mapInObjsToOutObjs.AddInput(key);
         if (!pEntry) continue;
 
-        AkAudioObjectID outputObjKey;
+        AkAudioObjectID outputObjKey = AK_INVALID_AUDIO_OBJECT_ID;
+
         if (isClustered)
         {
-            bool foundExistingCluster = false;
+            // Try to find the best existing cluster first
+            if (existingOutputs.uNumObjects > 0) {
+                AKRESULT result = FindBestCluster(clusterIt->first, existingOutputs, outputObjKey);
 
-            // Try to find an existing cluster this object can join
-            if (existingOutputs.uNumObjects > 0)
-            {
-                float thresholdSquared = m_pParams->RTPC.distanceThreshold * m_pParams->RTPC.distanceThreshold;
-
-                for (AkUInt32 j = 0; j < existingOutputs.uNumObjects; ++j)
-                {
-                    auto existingEntry = m_mapInObjsToOutObjs.Begin();
-                    while (existingEntry != m_mapInObjsToOutObjs.End())
-                    {
-                        if ((*existingEntry).pUserData->isClustered &&
-                            (*existingEntry).pUserData->outputObjKey == existingOutputs.ppObjects[j]->key)
-                        {
-                            // Check if object is close enough to join this cluster
-                            AkVector existingPos = existingOutputs.ppObjects[j]->positioning.threeD.xform.Position();
-                            if (m_utilities->GetDistanceSquared(existingPos, clusterIt->first) < thresholdSquared)
-                            {
-                                outputObjKey = existingOutputs.ppObjects[j]->key;
-                                foundExistingCluster = true;
-                                break;
-                            }
-                        }
-                        ++existingEntry;
-                    }
-                    if (foundExistingCluster) break;
+                // If no suitable existing cluster found, create a new one
+                if (result != AK_Success) {
+                    outputObjKey = m_utilities->CreateOutputObject(inobj, inObjects, i, m_pContext, &clusterIt->first);
                 }
             }
-
-            // No suitable existing cluster found, create a new one
-            if (!foundExistingCluster)
-            {
+            else {
+                // No existing clusters, create first one
                 outputObjKey = m_utilities->CreateOutputObject(inobj, inObjects, i, m_pContext, &clusterIt->first);
             }
 
@@ -394,6 +373,43 @@ AKRESULT ObjectClusterFX::AllocateVolumes(AK::SpeakerVolumes::MatrixPtr& volumeM
 
     volumeMatrix = matrix;
     return AK_Success;
+}
+
+void ObjectClusterFX::FreeVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix)
+{
+    if (volumeMatrix) {
+        m_pAllocator->Free(volumeMatrix);
+        volumeMatrix = nullptr;
+    }
+}
+
+AKRESULT ObjectClusterFX::FindBestCluster(const AkVector& position, const AkAudioObjects& existingOutputs, AkAudioObjectID& outClusterKey)
+{
+    float thresholdSquared = m_pParams->RTPC.distanceThreshold * m_pParams->RTPC.distanceThreshold;
+    float closestDistanceSquared = FLT_MAX;
+    bool foundCluster = false;
+
+    // First pass: find the closest existing cluster within threshold
+    for (AkUInt32 i = 0; i < existingOutputs.uNumObjects; ++i) {
+        auto existingEntry = m_mapInObjsToOutObjs.Begin();
+        while (existingEntry != m_mapInObjsToOutObjs.End()) {
+            if ((*existingEntry).pUserData->isClustered &&
+                (*existingEntry).pUserData->outputObjKey == existingOutputs.ppObjects[i]->key) {
+
+                AkVector existingPos = existingOutputs.ppObjects[i]->positioning.threeD.xform.Position();
+                float distanceSquared = m_utilities->GetDistanceSquared(existingPos, position);
+
+                if (distanceSquared < thresholdSquared && distanceSquared < closestDistanceSquared) {
+                    closestDistanceSquared = distanceSquared;
+                    outClusterKey = existingOutputs.ppObjects[i]->key;
+                    foundCluster = true;
+                }
+            }
+            ++existingEntry;
+        }
+    }
+
+    return foundCluster ? AK_Success : AK_Fail;
 }
 
 std::unordered_map<AkAudioObjectID, ClusterState> ObjectClusterFX::ReadClusterStates(const AkAudioObjects& inObjects)
