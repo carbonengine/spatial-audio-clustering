@@ -364,7 +364,6 @@ void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects)
     }
 
     m_kmeans->setDistanceThreshold(m_pParams->RTPC.distanceThreshold);
-    m_kmeans->setTolerance(m_pParams->RTPC.tolerance);
 
     // Perform clustering only if there are objects
     m_clusters.clear();
