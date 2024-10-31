@@ -54,7 +54,6 @@ AKRESULT ObjectClusterFXParams::Init(AK::IAkPluginMemAlloc* in_pAllocator, const
     {
         // Initialize default parameters here
         RTPC.distanceThreshold = 100.0f;
-        RTPC.tolerance = 0.001f;
 
         m_paramChangeHandler.SetAllParamChanges();
         return AK_Success;
@@ -75,7 +74,6 @@ AKRESULT ObjectClusterFXParams::SetParamsBlock(const void* in_pParamsBlock, AkUI
     AkUInt8* pParamsBlock = (AkUInt8*)in_pParamsBlock;
 
     RTPC.distanceThreshold = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
-    RTPC.tolerance = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
 
     CHECKBANKDATASIZE(in_ulBlockSize, eResult);
     m_paramChangeHandler.SetAllParamChanges();
@@ -94,10 +92,6 @@ AKRESULT ObjectClusterFXParams::SetParam(AkPluginParamID in_paramID, const void*
         RTPC.distanceThreshold = *((AkReal32*)in_pValue);
         m_paramChangeHandler.SetParamChange(DISTANCE_THRESHOLD);
         break;
-    case TOLERANCE:
-		RTPC.tolerance = *((AkReal32*)in_pValue);
-		m_paramChangeHandler.SetParamChange(TOLERANCE);
-		break;
     default:
         eResult = AK_InvalidParameter;
         break;

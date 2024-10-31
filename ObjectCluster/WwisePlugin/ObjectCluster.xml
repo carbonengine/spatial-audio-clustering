@@ -54,19 +54,6 @@ for the documentation about the plugin xml format
           </ValueRestriction>
         </Restrictions>
       </Property>
-      <Property Name="CCP:tolerance" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Tolerance">
-        <UserInterface Step="0.01" Fine="0.001" Decimals="3" UIMax="1" />
-        <DefaultValue>0.01</DefaultValue>
-        <AudioEnginePropertyID>1</AudioEnginePropertyID>
-        <Restrictions>
-          <ValueRestriction>
-            <Range Type="Real32">
-              <Min>0.01</Min>
-              <Max>1</Max>
-            </Range>
-          </ValueRestriction>
-        </Restrictions>
-      </Property>
     </Properties>
   </EffectPlugin>
 </PluginModule>
