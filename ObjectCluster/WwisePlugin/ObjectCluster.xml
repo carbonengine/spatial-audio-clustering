@@ -42,14 +42,14 @@ for the documentation about the plugin xml format
     <Properties>
       <!-- Add your property definitions here -->
       <Property Name="CCP:distanceThreshold" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Distance Threshold">
-        <UserInterface Step="0.1" Fine="0.001" Decimals="5" UIMax="200" />
-        <DefaultValue>100</DefaultValue>
+        <UserInterface Step="0.1" Fine="0.001" Decimals="5" UIMax="2000" />
+        <DefaultValue>200</DefaultValue>
         <AudioEnginePropertyID>0</AudioEnginePropertyID>
         <Restrictions>
           <ValueRestriction>
             <Range Type="Real32">
-              <Min>20</Min>
-              <Max>200</Max>
+              <Min>100</Min>
+              <Max>2000</Max>
             </Range>
           </ValueRestriction>
         </Restrictions>

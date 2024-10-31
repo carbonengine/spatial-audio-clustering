@@ -40,19 +40,19 @@ the specific language governing permissions and limitations under the License.
 
 struct GeneratedObject
 {
-	bool isClustered = false;
-	AkAudioObjectID outputObjKey;
-	int index;
 	AK::SpeakerVolumes::MatrixPtr volumeMatrix = nullptr;
 	AkVector offset;
 	AkVector currentPosition;
+	AkAudioObjectID outputObjKey;
+	int index;
+	bool isClustered = false;
 };
 
 struct ClusterState {
-	bool hasActiveInput = false;
 	AkUInt32 activeInputCount = 0;
 	AkUInt32 totalInputCount = 0;
 	AkUInt16 maxFrames = 0;
+	bool hasActiveInput = false;
 };
 
 class ObjectClusterFX
@@ -83,26 +83,20 @@ public:
 		) override;
 
 
-
 private:
 	ObjectClusterFXParams* m_pParams;
 	AK::IAkPluginMemAlloc* m_pAllocator;
 	AK::IAkEffectPluginContext* m_pContext;
 
-	/// Bookeeping for all Input Objects, uses the AkMixerInputMap to keep track of them.
-	void BookkeepAudioObjects(const AkAudioObjects& inObjects);
-	/// Utilize the map to write to the input objects to their corresponding output objects.
-	void ProcessAudioObjects(const AkAudioObjects& inObjects);
-	/// Mix the Input object to the output, the method will redirect the mixing
-	/// to either use the Wwise API or our custom mixing approach based on an RTPC.
-	void MixInputToOutput(
-		const AkAudioObject* inObject,
-		AkAudioBuffer* inBuffer,
-		AkAudioBuffer* outBuffer,
-		const AkRamp& cumulativeGain,
-		GeneratedObject* pGeneratedObject
-	);
+	/// Feeds the KMeans clustering algorithm with positional data from the input objects
+	void FeedPositionsToKMeans(const AkAudioObjects& inObjects);
 
+	/// Prepare audio objects state and assign them to their corresponding clusters or handle non-clustered objects.
+	void PrepareAudioObjects(const AkAudioObjects& inObjects);
+	/// Processes all input objects to their corresponding outputs based on their mapped destinations.
+	/// Handles cluster mixing and state management for each object.
+	void ProcessAudioObjects(const AkAudioObjects& inObjects);
+	/// Processes a clustered audio object by mixing it into its assigned cluster and managing its state.
 	void ProcessClusteredObject(
 		const AkAudioObject* inObj,
 		AkAudioBuffer* inBuf,
@@ -111,43 +105,58 @@ private:
 		GeneratedObject* userData,
 		const ClusterState& clusterState);
 
-
+	/// Processes an unclustered audio object by directly copying it to its corresponding output.
 	void ProcessUnclustered(
 		const AkAudioObject* inObj,
 		AkAudioBuffer* inBuf,
 		AkAudioObject* outObj,
 		AkAudioBuffer* outBuf);
 
-	/// Populates the KMeans clustering algorithm with positional data from the input objects
-	void PopulateClusters(const AkAudioObjects& inObjects);
+	/// Mixes multiple input audio objects that belong to the same cluster into a single output object.
+	void MixToCluster(
+		const AkAudioObject* inObject,
+		AkAudioBuffer* inBuffer,
+		AkAudioBuffer* outBuffer,
+		const AkRamp& cumulativeGain,
+		GeneratedObject* pGeneratedObject
+	);
 
+	/// Retrieves the current set of output audio objects from the plugin context.
 	AkAudioObjects GetCurrentOutputObjects();
 
+	/// Analyzes all input objects and calculates the state of each cluster including active inputs and frame counts.
 	std::unordered_map<AkAudioObjectID, ClusterState> ReadClusterStates(const AkAudioObjects& inObjects);
 
-	/// Allocates memory for the input speaker volume matrix
-	AKRESULT AllocateVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix, AkUInt32 in_uNumChannelsIn, AkUInt32 in_uNumChannelsOut);
-
-	std::unique_ptr<KMeans> m_kmeans;
-	std::unique_ptr<Utilities> m_utilities;
-
-	std::vector<AkAudioBuffer*> m_tempBuffers;
-	std::vector<AkAudioObject*> m_tempObjects;
-
-	std::vector<AkAudioObjectID> m_activeClusters;
-
-	/// Maps that hold KMeans clustering data
-	std::map<AkVector, std::vector<AkAudioObjectID>> m_clusterMap;
-
-	AkMixerInputMap<AkUInt64, GeneratedObject> m_mapInObjsToOutObjs;
-
-
-	void ObjectClusterFX::FreeVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix);
-
+	/// Finds the most suitable existing cluster for a given position based on distance threshold.
 	AKRESULT ObjectClusterFX::FindBestCluster(
 		const AkVector& position,
 		const AkAudioObjects& existingOutputs,
 		AkAudioObjectID& outClusterKey);
+
+	/// Returns the cluster containing the specified object ID, or nullptr if not found.
+	const std::pair<AkVector, std::vector<AkAudioObjectID>>* GetCluster(AkAudioObjectID objectId) const;
+
+	/// Allocates memory for the input speaker volume matrix
+	AKRESULT AllocateVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix, AkUInt32 in_uNumChannelsIn, AkUInt32 in_uNumChannelsOut);
+
+	/// Allocates memory for the input speaker volume matrix.
+	void FreeVolume(AK::SpeakerVolumes::MatrixPtr& volumeMatrix);
+
+	/// Frees memory allocated for a single volume matrix.
+	void FreeAllVolumes();
+
+	/// Member variables
+	std::unique_ptr<KMeans> m_kmeans;
+	std::unique_ptr<Utilities> m_utilities;
+	std::vector<AkAudioBuffer*> m_tempBuffers;
+	std::vector<AkAudioObject*> m_tempObjects;
+	std::vector<AkAudioObjectID> m_activeClusters;
+
+	/// Maps that hold KMeans clustering data
+	std::vector<std::pair<AkVector, std::vector<AkAudioObjectID>>> m_clusters;
+
+	/// Maps input objects to their corresponding output objects and processing information
+	AkMixerInputMap<AkUInt64, GeneratedObject> m_mapInObjsToOutObjs;
 };
 
 #endif // ObjectClusterFX_H

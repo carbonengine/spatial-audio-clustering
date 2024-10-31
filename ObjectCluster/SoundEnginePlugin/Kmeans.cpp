@@ -190,7 +190,7 @@ void KMeans::setTolerance(float newValue) {
 }
 
 void KMeans::setDistanceThreshold(float newValue) {
-    distanceThreshold = clamp(newValue, 0.1f, 1000.0f);
+    distanceThreshold = clamp(newValue, 0.1f, 2000.0f);
 }
 
 void KMeans::performClustering(const std::vector<ObjectPosition>& objects, unsigned int max_iterations) {
