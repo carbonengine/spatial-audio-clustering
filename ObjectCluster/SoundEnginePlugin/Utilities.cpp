@@ -67,4 +67,35 @@ float Utilities::GetDistanceSquared(const AkVector& v1, const AkVector& v2)
     return dx * dx + dy * dy + dz * dz;
 }
 
+AkVector Utilities::CalculateMeanPosition(const std::vector<AkAudioObjectID>& clusterObjects, const AkAudioObjects& inObjects)
+{
+    AkVector sumPosition;
+    sumPosition.X = 0.0f;
+    sumPosition.Y = 0.0f;
+    sumPosition.Z = 0.0f;
+    int validObjectCount = 0;
+
+    // Sum up positions of all objects in the cluster
+    for (const auto& objId : clusterObjects) {
+        for (AkUInt32 i = 0; i < inObjects.uNumObjects; i++) {
+            if (inObjects.ppObjects[i]->key == objId) {
+                const AkVector& pos = inObjects.ppObjects[i]->positioning.threeD.xform.Position();
+                sumPosition.X += pos.X;
+                sumPosition.Y += pos.Y;
+                sumPosition.Z += pos.Z;
+                validObjectCount++;
+                break;
+            }
+        }
+    }
+
+    // Calculate mean position
+    if (validObjectCount > 0) {
+        sumPosition.X /= validObjectCount;
+        sumPosition.Y /= validObjectCount;
+        sumPosition.Z /= validObjectCount;
+    }
+    return sumPosition;
+}
+
 

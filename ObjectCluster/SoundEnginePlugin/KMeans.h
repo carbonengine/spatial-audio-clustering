@@ -8,6 +8,7 @@
 #include <AK/SoundEngine/Common/AkTypes.h>
 #include <AK/SoundEngine/Common/AkCommonDefs.h>
 #include <AK/Plugin/PluginServices/AkMixerInputMap.h>
+#include "Utilities.h"
 
 #undef min
 #undef max
@@ -45,43 +46,61 @@ struct ObjectPosition {
 };
 
 /**
+ * @brief Holds metadata about an object used during cluster initialization.
+ */
+struct ObjectMetadata {
+    ObjectPosition object;
+    float localDensity;    // Density of objects in local neighborhood
+    float minDistanceToCentroid; // Min distance to any existing centroid
+};
+
+/**
  * @brief Implements the K-means clustering algorithm for audio objects in 3D space.
  *
  * K-means clustering is an unsupervised machine learning algorithm that groups similar data points
  * into a specified number (K) of clusters. It achieves this by iteratively assigning each data point
  * to the cluster with the nearest mean (centroid) and then recalculating the cluster means until convergence.
- * K-means is commonly used in customer segmentation, image compression, and anomaly detection.
+ * K-means is commonly used in data classification and pattern recognition.
  *
  * In the context of our use case, we adapt the algorithm to work in 3D space for audio object clustering.
  * The implemented algorithm follows these steps:
- * 1. **Initialization:** Randomly select K 3D positions of existing spatialized audio objects.
- * 2. **Assignment:** Each audio object is assigned to the cluster whose centroid is closest to it
- *    (based on 3D Euclidean distance).
+ * 1. **Initialization:** Determines centroids based on local density, with special handling for objects
+ *    near the origin. Additional centroids are selected using k-means++ approach, maximizing distances
+ *    between centroids while respecting a distance threshold.
+ * 2. **Assignment:** Each audio object is assigned to the nearest centroid if within the specified
+ *    distance threshold. Objects beyond the threshold are marked as unassigned.
  * 3. **Update Step:** The centroid of each cluster is recalculated as the average position of all
- *    audio objects assigned to it.
- * 4. **Convergence:** This iterative process continues until the cluster assignments no longer change
- *    significantly (the centroids stabilize) or a maximum number of iterations is reached.
- * 5. **Result:** The final result is a set of `k` clusters, where each cluster is represented by a
- *    single `AkAudioObject` whose position is the centroid of the cluster. Each audio object in the
- *    input data is assigned to one of these clusters.
- *
- * This implementation provides functionality to cluster audio objects based on their 3D positions,
- * which can be used for audio processing optimizations or spatial audio rendering.
+ *    audio objects assigned to it. Empty clusters are removed, and new clusters may form from
+ *    unassigned points if they are sufficiently close together.
+ * 4. **Convergence:** This iterative process continues until either cluster assignments stabilize,
+ *    the change in Sum of Squared Errors (SSE) falls below the tolerance threshold, or the maximum
+ *    iterations are reached.
+ * 5. **Result:** The final result is a dynamic set of clusters, each represented by its centroid
+ *    position. The number of clusters can vary based on the spatial distribution of audio objects
+ *    and the distance threshold constraints.
  */
+
 class KMeans {
 private:
-    std::vector<AkVector> centroids; ///< The centroids of the clusters.
-    unsigned int seed; ///< Seed for the random number generator.
-    float tolerance; ///< Tolerance for convergence.
-    float distanceThreshold; ///< Maximum distance for a point to be considered in a cluster.
-    std::vector<int> labels; ///< Labels assigning each point to a cluster.
+
     unsigned int maxClusters; ///< Maximum number of clusters.
+    unsigned int seed; ///< Seed for the random number generator.
+    float m_tolerance; ///< Tolerance for convergence.
+    float m_distanceThreshold; ///< Maximum distance for a point to be considered in a cluster.
+    float m_minThreshold; ///< Minimun value for the distance threshold.
+    float m_maxThreshold; ///< Maximum value for the distance threshold.
+    std::vector<AkVector> centroids; ///< The centroids of the clusters.
+    std::vector<int> labels; ///< Labels assigning each point to a cluster.
     std::vector<std::vector<ObjectPosition>> clusters; ///< The resulting clusters.
     std::vector<float> sse_values; /// Sum of squared errors values
     std::vector<ObjectPosition> unassignedPoints; /// A vector for unassigned points.
+    Utilities m_utilities;
 
 
-
+    /**
+     * @brief Retrieves points that couldn't be assigned to any cluster due to distance constraints.
+     * @return A const reference to the vector of unassigned object positions.
+     */
     const std::vector<ObjectPosition>& KMeans::getUnassignedPoints() const {
         return unassignedPoints;
     }
@@ -160,13 +179,27 @@ private:
     */
     void adjustClusterCount();
 
+    /**
+     * @brief Calculates the Gaussian weight based on squared distance and radius
+     * @param distanceSquared The squared distance between two points
+     * @param radiusSquared The squared radius of influence
+     * @return The calculated weight
+     */
+
+    float calculateGaussianWeight(float distanceSquared, float radiusSquared) const;
+    
+
+
 public:
     /**
      * @brief Constructs a KMeans instance.
      * @param tolerance The convergence tolerance.
      * @param distanceThreshold The maximum distance for a point to be in a cluster.
      */
-    KMeans(float tolerance = 0.01f, float distanceThreshold = 100.0f);
+    KMeans(float tolerance = 0.01f,
+        float distanceThreshold = 100.0f,
+        float minDistanceThreshold = 10.f,
+        float maxDistanceThreshold = 1000.f);
 
     /**
      * @brief Sets the convergence tolerance.
@@ -179,6 +212,16 @@ public:
      * @param newValue The new distance threshold value.
      */
     void setDistanceThreshold(float newValue);
+
+    /**
+     * @brief Sets the internal minimun distance threshold value.
+    */
+    void setMinDistanceThreshold(float newValue);
+
+    /**
+     * @brief Sets the internal maximum distance threshold value.
+    */
+    void setMaxDistanceThreshold(float newValue);
 
     /**
      * @brief Performs K-means clustering on the given objects.

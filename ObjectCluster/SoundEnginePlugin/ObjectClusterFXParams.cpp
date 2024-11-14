@@ -53,7 +53,7 @@ AKRESULT ObjectClusterFXParams::Init(AK::IAkPluginMemAlloc* in_pAllocator, const
     if (in_ulBlockSize == 0)
     {
         // Initialize default parameters here
-        RTPC.distanceThreshold = 100.0f;
+        RTPC.distanceThreshold = 200.f;
 
         m_paramChangeHandler.SetAllParamChanges();
         return AK_Success;
