@@ -64,6 +64,11 @@ AKRESULT ObjectClusterFX::Init(AK::IAkPluginMemAlloc* in_pAllocator, AK::IAkEffe
 
     in_rFormat.channelConfig.SetObject();
 
+    // Set min-max values for the distance threshold
+    // These are specific to eve & frontier ships, adjust accordingly
+    m_kmeans->setMinDistanceThreshold(1.f);
+    m_kmeans->setMaxDistanceThreshold(1000.f);
+
     return AK_Success;
 }
 
@@ -81,7 +86,6 @@ AKRESULT ObjectClusterFX::Reset()
     m_clusters.clear();
     m_tempBuffers.clear();
     m_tempObjects.clear();
-    m_activeClusters.clear();
 
     return AK_Success;
 }
@@ -97,100 +101,116 @@ AKRESULT ObjectClusterFX::GetPluginInfo(AkPluginInfo& out_rPluginInfo)
 }
 
 void ObjectClusterFX::Execute(
-    const AkAudioObjects& inObjects,  // Input objects and object buffers.
-    const AkAudioObjects& outObjects  // Output objects and object buffers.
+    const AkAudioObjects& inObjects, 
+    const AkAudioObjects& outObjects
 ) {
     AKASSERT(inObjects.uNumObjects > 0);
 
     PrepareAudioObjects(inObjects);
     ProcessAudioObjects(inObjects);
+    UpdateClusterPositions(inObjects);
 }
 
 void ObjectClusterFX::PrepareAudioObjects(const AkAudioObjects& inObjects)
 {
     FeedPositionsToKMeans(inObjects);
-    AkAudioObjects existingOutputs = { 0 };
+    std::unordered_map<const std::pair<AkVector, std::vector<AkAudioObjectID>>*, AkAudioObjectID> clusterOutputObjects;
 
-    if (!m_mapInObjsToOutObjs.IsEmpty()) {
-        existingOutputs = GetCurrentOutputObjects();
-    }
+    // Get current outputs at start
+    AkAudioObjects existingOutputs = GetCurrentOutputObjects();
 
-    // Handle existing objects and update their indices
-    for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i)
-    {
+    // Update existing objects and map clusters to existing outputs
+    for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i) {
         AkAudioObject* inobj = inObjects.ppObjects[i];
         AkAudioObjectID key = inobj->key;
         GeneratedObject* pEntry = m_mapInObjsToOutObjs.Exists(key);
-        if (pEntry)
-        {
+        if (pEntry) {
             pEntry->index = i;
         }
     }
 
-    // Handle new objects
-    for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i)
-    {
-        AkAudioObject* inobj = inObjects.ppObjects[i];
-        AkAudioObjectID key = inobj->key;
-
-        if (m_mapInObjsToOutObjs.Exists(key)) continue;
-
-        const auto* cluster = GetCluster(key);
-        bool isClustered = (cluster != nullptr);
-
-        // Create new entry for this object
-        GeneratedObject* pEntry = m_mapInObjsToOutObjs.AddInput(key);
-        if (!pEntry) continue;
-
-        if (isClustered && existingOutputs.uNumObjects > 0)
-        {
-            // Try every existing cluster first before creating a new one
-            bool foundMatch = false;
-            AkAudioObjectID bestMatchKey = AK_INVALID_AUDIO_OBJECT_ID;
-
-            // Try matching with current frame's cluster position
-            AKRESULT result = FindBestCluster(cluster->first, existingOutputs, bestMatchKey);
-            if (result == AK_Success)
-            {
-                pEntry->outputObjKey = bestMatchKey;
-                foundMatch = true;
-            }
-            else
-            {
-                // If no match with current position, try matching with the cluster's members' positions
-                for (const auto& memberId : cluster->second)
-                {
-                    if (memberId == key) continue;
-
-                    GeneratedObject* memberEntry = m_mapInObjsToOutObjs.Exists(memberId);
-                    if (memberEntry && memberEntry->isClustered)
-                    {
-                        pEntry->outputObjKey = memberEntry->outputObjKey;
-                        foundMatch = true;
-                        break;
+    // For each cluster, try to find if any of its objects are using an existing output
+    if (existingOutputs.uNumObjects > 0) {
+        for (const auto& cluster : m_clusters) {
+            for (const auto& objId : cluster.second) {
+                GeneratedObject* pEntry = m_mapInObjsToOutObjs.Exists(objId);
+                if (pEntry && pEntry->isClustered) {
+                    // Verify this output still exists
+                    for (AkUInt32 i = 0; i < existingOutputs.uNumObjects; i++) {
+                        if (existingOutputs.ppObjects[i] &&
+                            existingOutputs.ppObjects[i]->key == pEntry->outputObjKey) {
+                            clusterOutputObjects[&cluster] = pEntry->outputObjKey;
+                            break;
+                        }
+                    }
+                    if (clusterOutputObjects.find(&cluster) != clusterOutputObjects.end()) {
+                        break;  // Found valid output for this cluster
                     }
                 }
             }
+        }
+    }
 
-            if (!foundMatch)
-            {
-                // Only create new cluster if we couldn't find any matches
-                pEntry->outputObjKey = m_utilities->CreateOutputObject(inobj, inObjects, i, m_pContext, &cluster->first);
+    // Handle new objects
+    for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i) {
+        AkAudioObject* inobj = inObjects.ppObjects[i];
+        AkAudioObjectID key = inobj->key;
+
+        GeneratedObject* pEntry = m_mapInObjsToOutObjs.Exists(key);
+        if (!pEntry) {  // Only handle new objects
+            pEntry = m_mapInObjsToOutObjs.AddInput(key);
+            if (!pEntry) continue;
+
+            bool isPositionedObject = (inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionOnly ||
+                inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionAndOrientation);
+
+            if (isPositionedObject) {
+                // Find which cluster this object belongs to from KMeans results
+                const std::pair<AkVector, std::vector<AkAudioObjectID>>* assignedCluster = nullptr;
+                for (const auto& cluster : m_clusters) {
+                    auto it = std::find(cluster.second.begin(), cluster.second.end(), key);
+                    if (it != cluster.second.end()) {
+                        assignedCluster = &cluster;
+                        break;
+                    }
+                }
+
+                if (assignedCluster) {
+                    // Check if we have an existing output for this cluster
+                    auto outputObjIt = clusterOutputObjects.find(assignedCluster);
+                    if (outputObjIt != clusterOutputObjects.end()) {
+                        // Use existing cluster output
+                        pEntry->outputObjKey = outputObjIt->second;
+                        pEntry->isClustered = true;
+                    }
+                    else {
+                        // Create new output for this cluster
+                        pEntry->outputObjKey = m_utilities->CreateOutputObject(inobj, inObjects, i, m_pContext, &assignedCluster->first);
+                        clusterOutputObjects[assignedCluster] = pEntry->outputObjKey;
+                        pEntry->isClustered = true;
+                    }
+                }
+                else {
+                    // Try to find nearest existing cluster
+                    AkAudioObjectID bestClusterKey;
+                    if (FindBestCluster(inobj->positioning.threeD.xform.Position(), existingOutputs, bestClusterKey) == AK_Success) {
+                        pEntry->outputObjKey = bestClusterKey;
+                        pEntry->isClustered = true;
+                    }
+                    else {
+                        // Only mark as unclustered if we really can't find a suitable cluster
+                        pEntry->outputObjKey = m_utilities->CreateOutputObject(inobj, inObjects, i, m_pContext, nullptr);
+                        pEntry->isClustered = false;
+                    }
+                }
             }
-
-            pEntry->offset = cluster->first - inobj->positioning.threeD.xform.Position();
-            pEntry->isClustered = true;
+            else {
+                // Not a spatial object - create unclustered output
+                pEntry->outputObjKey = m_utilities->CreateOutputObject(inobj, inObjects, i, m_pContext, nullptr);
+                pEntry->isClustered = false;
+            }
+            pEntry->index = i;
         }
-        else
-        {
-            // Handle unclustered object
-            pEntry->offset.Zero();
-            pEntry->outputObjKey = m_utilities->CreateOutputObject(inobj, inObjects, i, m_pContext,
-                isClustered ? &cluster->first : nullptr);
-            pEntry->isClustered = isClustered;
-        }
-
-        pEntry->index = i;
     }
 
     m_tempBuffers.clear();
@@ -266,28 +286,22 @@ void ObjectClusterFX::ProcessAudioObjects(const AkAudioObjects& inObjects)
     m_tempObjects.clear();
 }
 
-void ObjectClusterFX::ProcessClusteredObject(const AkAudioObject* inObj,
+void ObjectClusterFX::ProcessClusteredObject(
+    const AkAudioObject* inObj,
     AkAudioBuffer* inBuf,
     AkAudioObject* outObj,
     AkAudioBuffer* outBuf,
     GeneratedObject* userData,
-    const ClusterState& clusterState) {
+    const ClusterState& clusterState)
+{
 
     if (inBuf->uValidFrames > 0) {
         MixToCluster(inObj, inBuf, outBuf, inObj->cumulativeGain, userData);
     }
 
-    // Update position
-    const auto* cluster = GetCluster(inObj->key);
-    if (cluster) {
-        // Calculate new position using current position and stored offset
-        AkVector currentPos = inObj->positioning.threeD.xform.Position();
-        AkVector newPos = currentPos + userData->offset;
-        outObj->positioning.threeD.xform.SetPosition(newPos);
-
-        std::string objName = "Cluster" + std::to_string(userData->outputObjKey);
-        outObj->SetName(m_pAllocator, objName.c_str());
-    }
+    // Set clustered object's name
+    std::string objName = "Cluster" + std::to_string(userData->outputObjKey);
+    outObj->SetName(m_pAllocator, objName.c_str());
 
     // Update buffer state
     bool allInputsDone = (clusterState.activeInputCount == 0);
@@ -351,20 +365,26 @@ void ObjectClusterFX::MixToCluster(const AkAudioObject* inObject, AkAudioBuffer*
 
 void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects)
 {
+
+    if (m_lastDistanceThreshold != m_pParams->RTPC.distanceThreshold) {
+        m_kmeans->setDistanceThreshold(m_pParams->RTPC.distanceThreshold);
+        m_lastDistanceThreshold = m_pParams->RTPC.distanceThreshold;
+    }
+
     std::vector<ObjectPosition> objectPositions;
     objectPositions.reserve(inObjects.uNumObjects);
 
     for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i) {
         AkAudioObject* inobj = inObjects.ppObjects[i];
-        // Only 3D objects should be clustered.
-        if (inobj->positioning.behavioral.spatMode != AK_SpatializationMode_None)
-        {
+
+        // Check if this is either position-only or position+orientation
+        bool shouldCluster = (inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionOnly ||
+            inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionAndOrientation);
+
+        if (shouldCluster) {
             objectPositions.push_back({ inobj->positioning.threeD.xform.Position(), inobj->key });
         }
     }
-
-    m_kmeans->setDistanceThreshold(m_pParams->RTPC.distanceThreshold);
-
     // Perform clustering only if there are objects
     m_clusters.clear();
     if (!objectPositions.empty()) {
@@ -425,6 +445,40 @@ void ObjectClusterFX::FreeAllVolumes()
     }
 }
 
+void ObjectClusterFX::UpdateClusterPositions(const AkAudioObjects& inObjects)
+{
+    AkAudioObjects outputObjects = GetCurrentOutputObjects();
+    if (outputObjects.uNumObjects == 0) return;
+
+    // Track which clusters we've already processed to avoid duplicates
+    std::set<AkAudioObjectID> processedClusters;
+
+    auto it = m_mapInObjsToOutObjs.Begin();
+    while (it != m_mapInObjsToOutObjs.End()) {
+        if ((*it).pUserData && (*it).pUserData->isClustered) {
+            AkAudioObjectID clusterKey = (*it).pUserData->outputObjKey;
+
+            if (processedClusters.find(clusterKey) == processedClusters.end()) {
+                // Find the corresponding cluster
+                const std::pair<AkVector, std::vector<AkAudioObjectID>>* cluster = GetCluster((*it).key);
+                if (cluster) {
+                    AkVector meanPosition = m_utilities->CalculateMeanPosition(cluster->second, inObjects);
+
+                    // Find and update the output object for this cluster
+                    for (AkUInt32 i = 0; i < outputObjects.uNumObjects; i++) {
+                        if (outputObjects.ppObjects[i] &&
+                            outputObjects.ppObjects[i]->key == clusterKey) {
+                            outputObjects.ppObjects[i]->positioning.threeD.xform.SetPosition(meanPosition);
+                        }
+                    }
+                    processedClusters.insert(clusterKey);
+                }
+            }
+        }
+        ++it;
+    }
+}
+
 AKRESULT ObjectClusterFX::FindBestCluster(const AkVector& position, const AkAudioObjects& existingOutputs, AkAudioObjectID& outClusterKey)
 {
     const float thresholdSquared = m_pParams->RTPC.distanceThreshold * m_pParams->RTPC.distanceThreshold;
@@ -473,10 +527,8 @@ std::unordered_map<AkAudioObjectID, ClusterState> ObjectClusterFX::ReadClusterSt
             AkAudioObjectID clusterID = it->outputObjKey;
             auto& state = clusterStates[clusterID];
 
-            state.totalInputCount++;
             if (inBuf->eState != AK_NoMoreData) {
                 state.activeInputCount++;
-                state.hasActiveInput = true;
             }
             if (inBuf->uValidFrames > 0) {
                 state.maxFrames = std::max(state.maxFrames, inBuf->uValidFrames);
@@ -489,26 +541,35 @@ std::unordered_map<AkAudioObjectID, ClusterState> ObjectClusterFX::ReadClusterSt
 
 AkAudioObjects ObjectClusterFX::GetCurrentOutputObjects()
 {
-    AkAudioObjects outputObjects;
+    AkAudioObjects outputObjects{};
     outputObjects.uNumObjects = 0;
     outputObjects.ppObjectBuffers = nullptr;
     outputObjects.ppObjects = nullptr;
 
+    if (!m_pContext) {
+        return outputObjects;
+    }
+
     // First call to get count
     m_pContext->GetOutputObjects(outputObjects);
 
-    if (outputObjects.uNumObjects > 0)
-    {
-        // Resize our member vectors
-        m_tempBuffers.resize(outputObjects.uNumObjects);
-        m_tempObjects.resize(outputObjects.uNumObjects);
+    if (outputObjects.uNumObjects > 0) {
+        try {
+            m_tempBuffers.resize(outputObjects.uNumObjects);
+            m_tempObjects.resize(outputObjects.uNumObjects);
 
-        // Use the vectors' data
-        outputObjects.ppObjectBuffers = m_tempBuffers.data();
-        outputObjects.ppObjects = m_tempObjects.data();
+            outputObjects.ppObjectBuffers = m_tempBuffers.data();
+            outputObjects.ppObjects = m_tempObjects.data();
 
-        // Second call to get actual data
-        m_pContext->GetOutputObjects(outputObjects);
+            // Second call to get actual data
+            m_pContext->GetOutputObjects(outputObjects);
+        }
+        catch (const std::bad_alloc&) {
+            // Reset on allocation failure
+            outputObjects.uNumObjects = 0;
+            outputObjects.ppObjectBuffers = nullptr;
+            outputObjects.ppObjects = nullptr;
+        }
     }
 
     return outputObjects;

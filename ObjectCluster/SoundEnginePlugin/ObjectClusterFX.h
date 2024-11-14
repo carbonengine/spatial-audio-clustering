@@ -39,14 +39,11 @@ the specific language governing permissions and limitations under the License.
  * @struct GeneratedObject
  * @brief Represents a generated audio object with its properties and state
  */
-struct GeneratedObject
-{
-    AK::SpeakerVolumes::MatrixPtr volumeMatrix = nullptr;  ///< Volume matrix for speaker output
-    AkVector offset;                                       ///< Positional offset of the object
-    AkVector currentPosition;                              ///< Current position in 3D space
-    AkAudioObjectID outputObjKey;                         ///< Unique identifier for the output object
-    int index;                                            ///< Index of the object
-    bool isClustered = false;                             ///< Flag indicating if object belongs to a cluster
+struct GeneratedObject {
+	AK::SpeakerVolumes::MatrixPtr volumeMatrix = nullptr;
+	AkAudioObjectID outputObjKey;
+	int index;
+	bool isClustered = false;
 };
 
 /**
@@ -54,10 +51,8 @@ struct GeneratedObject
  * @brief Maintains the state of an audio object cluster
  */
 struct ClusterState {
-    AkUInt32 activeInputCount = 0;    ///< Number of active inputs in the cluster
-    AkUInt32 totalInputCount = 0;     ///< Total number of inputs in the cluster
-    AkUInt16 maxFrames = 0;           ///< Maximum number of frames
-    bool hasActiveInput = false;       ///< Flag indicating if cluster has any active inputs
+	AkUInt32 activeInputCount = 0;
+	AkUInt16 maxFrames = 0;
 };
 
 /**
@@ -228,14 +223,20 @@ private:
      */
     void FreeAllVolumes();
 
-    std::unique_ptr<KMeans> m_kmeans;                     ///< KMeans clustering implementation
-    std::unique_ptr<Utilities> m_utilities;               ///< Utility functions
-    std::vector<AkAudioBuffer*> m_tempBuffers;           ///< Temporary audio buffers
-    std::vector<AkAudioObject*> m_tempObjects;           ///< Temporary audio objects
-    std::vector<AkAudioObjectID> m_activeClusters;       ///< Currently active clusters
+	std::unique_ptr<KMeans> m_kmeans;
+	std::unique_ptr<Utilities> m_utilities;
+	std::vector<AkAudioBuffer*> m_tempBuffers;
+	std::vector<AkAudioObject*> m_tempObjects;
 
-    std::vector<std::pair<AkVector, std::vector<AkAudioObjectID>>> m_clusters;  ///< KMeans clustering data
-    AkMixerInputMap<AkUInt64, GeneratedObject> m_mapInObjsToOutObjs;           ///< Input to output object mapping
+	float m_lastDistanceThreshold = -1.0f;
+
+	/// Maps that hold KMeans clustering data
+	std::vector<std::pair<AkVector, std::vector<AkAudioObjectID>>> m_clusters;
+
+	/// Maps input objects to their corresponding output objects and processing information
+	AkMixerInputMap<AkUInt64, GeneratedObject> m_mapInObjsToOutObjs;
+
+	void UpdateClusterPositions(const AkAudioObjects& inObjects);
 };
 
 #endif // ObjectClusterFX_H

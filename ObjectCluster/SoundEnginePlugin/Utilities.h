@@ -2,6 +2,7 @@
 
 #include <AK/SoundEngine/Common/AkTypes.h>
 #include "ObjectClusterFXParams.h"
+#include <vector>
 
 
 
@@ -53,4 +54,16 @@ public:
       * @return The squared Euclidean distance between the vectors
       */
     float GetDistanceSquared(const AkVector& v1, const AkVector& v2);
+
+
+    /**
+     * @brief Calculates the average position of a group of audio objects in a cluster.
+     *
+     * @param clusterObjects Vector of audio object IDs in the cluster
+     * @param inObjects Input audio objects containing position data
+     * @return AkVector The mean position of all objects in the cluster
+     */ 
+    AkVector CalculateMeanPosition(
+        const std::vector<AkAudioObjectID>& clusterObjects,
+        const AkAudioObjects& inObjects); 
 };
