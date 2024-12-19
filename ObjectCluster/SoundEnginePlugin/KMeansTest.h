@@ -1,3 +1,8 @@
+/*
+ * Example K-means clustering implementation for educational/testing purposes.
+ * This is a simplified version to demonstrate the concepts used in
+ * the production implementation of the Object Cluster Plugin.
+ */
 
 #include <iostream>
 #include <vector>

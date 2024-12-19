@@ -1,0 +1,9 @@
+Spatial Audio Object Clustering Plugin for Wwise
+Copyright 2024 CCP Games
+
+This product includes software developed for audio object clustering
+in spatial audio applications, specifically designed for large-scale
+space battle scenarios in EVE Online and EVE Frontier.
+
+This software includes the following third-party components:
+- Wwise SDK (Copyright Audiokinetic Inc.)
