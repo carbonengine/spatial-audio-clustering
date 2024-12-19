@@ -22,6 +22,12 @@ OR CONDITIONS OF ANY KIND, either express or implied. See the Apache License for
 the specific language governing permissions and limitations under the License.
 
   Copyright (c) 2023 Audiokinetic Inc.
+  Copyright (c) 2024 CCP ehf.
+
+This implementation was developed by CCP Games for spatial audio object clustering
+in EVE Online and EVE Frontier. This implementation does not grant any rights to
+CCP's trademarks or game content. EVE Online and EVE Frontier are registered
+trademarks of CCP ehf.
 *******************************************************************************/
 
 #ifndef ObjectClusterFX_H
