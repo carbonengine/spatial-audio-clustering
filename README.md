@@ -172,9 +172,12 @@ We welcome all contributions, whether they're feature requests, bug fixes, docum
 
 This project is licensed under the [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0).
 
-Copyright (c) 2024 - present CCP ehf.
+Copyright 2024 CCP Games
 
-This software was developed by CCP Games for spatial audio object clustering in EVE Online and EVE Frontier.
-While it is released under the Apache License 2.0, please note that this does not grant any rights to CCP Games' trademarks or game content.
+Important:  
+- This plugin references Audiokinetic’s Wwise SDK but does not include or distribute it.
+- The Licence does not extend to the Wwise SDK or any other third-party software included in this project. You must separately obtain and comply with Audiokinetic’s terms to use the Wwise SDK or the relevant third-party software.
+- Nothing in this License grants any rights to CCP Games' trademarks or game content.
 
 Built on the Audiokinetic Wwise SDK.
+- Compatibility: Built to integrate with the Audiokinetic Wwise SDK.
