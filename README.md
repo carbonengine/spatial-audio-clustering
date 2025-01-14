@@ -33,7 +33,7 @@ Therefore, we developed this tool with the main goal of mixing/grouping all soun
 ## 🎮 In-Game Impact
 
 ### Without Plugin
-![Before Clustering](https://github.com/user-attachments/assets/7782ff8f-1e5e-4326-8b58-f78d59cbdbd0)
+![Before Clustering](https://github.com/user-attachments/assets/29e2f23e-4f89-4708-b17a-dadfac6122a6)
 
 Scene with 20 ships firing at the player:
 - System audio object consumption is constantly being exceeded
@@ -41,7 +41,8 @@ Scene with 20 ships firing at the player:
 - No control over which objects are spatialized and which are redirected into the main mix.
 
 ### With Plugin
-![After Clustering](https://github.com/user-attachments/assets/70c196bf-144b-405e-af78-914b2f76d4c8)
+![After Clustering](https://github.com/user-attachments/assets/f459b6d0-1fb4-4589-8f24-0a45382fff35)
+
 
 Same scene with plugin enabled:
 - System audio object consumption is drastically reduced (20-24 objects)
@@ -54,14 +55,15 @@ Same scene with plugin enabled:
 - Place the plugin stategicaly in busses that need clustering (e.g turrets, missiles, engines)
 - Use tighter clustering for dense sources (turret fire) vs spread-out sounds (shields)
 
-![Wwise_wZagotM3pz](https://github.com/user-attachments/assets/88c217c1-87c9-4132-aba8-04eede2d46e1)
+![Wwise_wZagotM3pz](https://github.com/user-attachments/assets/13923066-2a35-449e-8f4b-75da1945cddf)
 
 ### Profiling
 - In Audio Devices -> System monitor the system audio object consuption in real-time
 - From the Wwise Authoring tool use Views->Profiler->Audio Object 3D Viewer profiler  for a visual spatial representation of the clusters
 - Go to Views->Profiler->Audio Object List and select different busses to change the focus of the Audio Object 3D Viewer
 
-![Wwise_TWJ1fyWlc5](https://github.com/user-attachments/assets/d46c84bb-196e-4c2a-b932-62920066b516)
+![Wwise_TWJ1fyWlc5](https://github.com/user-attachments/assets/19bb3d45-3358-414f-bfa2-80bff6468237)
+
 
 ### Debugging
 To place breakpoints and debug the plugin follow the steps [here](https://www.audiokinetic.com/qa/7840/wwise-sdk-how-step-through-code-using-visual-studio-debugger)
