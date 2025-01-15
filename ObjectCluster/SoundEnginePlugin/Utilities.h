@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 CCP ehf.
+ * Copyright 2024 CCP ehf.
  *
  * This software was developed by CCP Games for spatial audio object clustering 
  * in EVE Online and EVE Frontier.

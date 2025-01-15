@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 CCP ehf.
+ * Copyright 2024 CCP ehf.
  *
  * This software was developed by CCP Games for spatial audio object clustering 
  * in EVE Online and EVE Frontier.
@@ -222,15 +222,6 @@ public:
         float distanceThreshold = 100.0f,
         float minDistanceThreshold = 10.f,
         float maxDistanceThreshold = 1000.f);
-
-
-    void reinitializeClustering() {
-        centroids.clear();
-        labels.clear();
-        clusters.clear();
-        sse_values.clear();
-        unassignedPoints.clear();
-    }
 
     /**
      * @brief Sets the convergence tolerance.

@@ -36,8 +36,8 @@ void KMeans::initializeCentroids(const std::vector<ObjectPosition>& objects) {
     std::vector<ObjectMetadata> objectsMetadata;
     objectsMetadata.reserve(objects.size());
 
-    // Use a smaller radius for density calculation when threshold is small
-    const float densityRadius = m_distanceThreshold * 0.25f; // More sensitive to local density
+    // Calculate local density including origin region
+    const float densityRadius = m_distanceThreshold * 0.5f;
     const float densityRadiusSq = densityRadius * densityRadius;
 
     // Track density around origin specifically
@@ -109,6 +109,7 @@ void KMeans::initializeCentroids(const std::vector<ObjectPosition>& objects) {
         size_t bestCandidate = 0;
         bool candidateFound = false;
 
+        // Find point with maximum minimum distance to existing centroids
         for (size_t i = 0; i < objectsMetadata.size(); ++i) {
             float minDist = std::numeric_limits<float>::max();
             for (const auto& centroid : centroids) {
@@ -116,15 +117,17 @@ void KMeans::initializeCentroids(const std::vector<ObjectPosition>& objects) {
                 minDist = std::min(minDist, dist);
             }
 
-            // More likely to create new centroids with smaller thresholds
-            if (minDist > maxMinDistance && minDist > m_distanceThreshold * 0.5f) {
+            if (minDist > maxMinDistance) {
                 maxMinDistance = minDist;
                 bestCandidate = i;
                 candidateFound = true;
             }
         }
 
-        if (!candidateFound) break;
+        if (!candidateFound || maxMinDistance < m_distanceThreshold) {
+            break;
+        }
+
         centroids.push_back(objectsMetadata[bestCandidate].object.position);
     }
 }
@@ -344,30 +347,16 @@ void KMeans::setTolerance(float newValue) {
 }
 
 void KMeans::setDistanceThreshold(float newValue) {
-
-    if (newValue != m_distanceThreshold) {
-        m_distanceThreshold = clamp(newValue, m_minThreshold, m_maxThreshold);
-
-        // Clear existing state to force recalculation
-        centroids.clear();
-        labels.clear();
-        clusters.clear();
-        sse_values.clear();
-        unassignedPoints.clear();
-    }
+    m_distanceThreshold = clamp(newValue, m_minThreshold, m_maxThreshold);
 }
 
 void KMeans::performClustering(const std::vector<ObjectPosition>& objects, unsigned int max_iterations) {
-    // Resize labels vector to match input size
     labels.resize(objects.size(), -1);
-
-    // Recalculate max clusters based on current objects
     maxClusters = determineMaxClusters(objects.size());
-
-    // Always reinitialize centroids
     initializeCentroids(objects);
 
     for (unsigned int iter = 0; iter < max_iterations; ++iter) {
+
         bool changed = assignPointsToClusters(objects);
         adjustClusterCount();
         bool centroidsUpdated = updateCentroids();
