@@ -22,7 +22,7 @@ OR CONDITIONS OF ANY KIND, either express or implied. See the Apache License for
 the specific language governing permissions and limitations under the License.
 
   Copyright (c) 2023 Audiokinetic Inc.
-  Copyright (c) 2024 CCP ehf.
+  Copyright (c) 2025 CCP ehf.
 
 This implementation was developed by CCP Games for spatial audio object clustering
 in EVE Online and EVE Frontier. This implementation does not grant any rights to
@@ -369,21 +369,46 @@ void ObjectClusterFX::MixToCluster(const AkAudioObject* inObject, AkAudioBuffer*
     AKPLATFORM::AkMemCpy(pGeneratedObject->volumeMatrix, currentVolumes, uTransmixSize);
 }
 
+void ObjectClusterFX::SafeCleanupForThresholdChange()
+{
+    auto it = m_mapInObjsToOutObjs.Begin();
+    while (it != m_mapInObjsToOutObjs.End()) {
+        if ((*it).pUserData) {
+            // Don't delete the object, just mark it as unclustered
+            (*it).pUserData->isClustered = false;
+            // Reset index to force reassignment
+            (*it).pUserData->index = -1;
+        }
+        ++it;
+    }
+
+    // Clear cluster assignments but maintain existing objects
+    m_clusters.clear();
+}
+
 void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects)
 {
+    bool thresholdChanged = false;
+    bool thresholdDecreased = false;
 
     if (m_lastDistanceThreshold != m_pParams->RTPC.distanceThreshold) {
+        thresholdChanged = true;
+        thresholdDecreased = m_pParams->RTPC.distanceThreshold < m_lastDistanceThreshold;
+
         m_kmeans->setDistanceThreshold(m_pParams->RTPC.distanceThreshold);
         m_lastDistanceThreshold = m_pParams->RTPC.distanceThreshold;
+
+        // Safe cleanup when threshold changes
+        SafeCleanupForThresholdChange();
     }
 
     std::vector<ObjectPosition> objectPositions;
     objectPositions.reserve(inObjects.uNumObjects);
 
+    // Collect positions and ensure proper redistribution
     for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i) {
         AkAudioObject* inobj = inObjects.ppObjects[i];
 
-        // Check if this is either position-only or position+orientation
         bool shouldCluster = (inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionOnly ||
             inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionAndOrientation);
 
@@ -391,11 +416,17 @@ void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects)
             objectPositions.push_back({ inobj->positioning.threeD.xform.Position(), inobj->key });
         }
     }
-    // Perform clustering only if there are objects
-    m_clusters.clear();
+
     if (!objectPositions.empty()) {
+        // Force reinitialization of KMeans when threshold decreases
+        if (thresholdDecreased) {
+            m_kmeans->reinitializeClustering();
+        }
+
         m_kmeans->performClustering(objectPositions);
 
+        // Update clusters with new assignments
+        m_clusters.clear();
         auto tempClusters = m_kmeans->getClusters();
         m_clusters.reserve(tempClusters.size());
 
