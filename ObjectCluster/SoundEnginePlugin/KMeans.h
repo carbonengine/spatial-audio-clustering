@@ -223,6 +223,9 @@ public:
         float minDistanceThreshold = 10.f,
         float maxDistanceThreshold = 1000.f);
 
+
+    void reset();
+
     /**
      * @brief Sets the convergence tolerance.
      * @param newValue The new tolerance value.

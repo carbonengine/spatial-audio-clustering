@@ -342,6 +342,15 @@ KMeans::KMeans(float tolerance, float distanceThreshold, float minDistanceThresh
     seed = rd();
 }
 
+void KMeans::reset()
+{
+	centroids.clear();
+	labels.clear();
+	clusters.clear();
+	sse_values.clear();
+	unassignedPoints.clear();
+}
+
 void KMeans::setTolerance(float newValue) {
     m_tolerance = clamp(newValue, 0.001f, 1.0f);
 }

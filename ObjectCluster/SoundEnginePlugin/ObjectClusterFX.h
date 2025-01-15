@@ -114,6 +114,9 @@ private:
     AK::IAkPluginMemAlloc* m_pAllocator;
     AK::IAkEffectPluginContext* m_pContext;
 
+    void ForceRecluster();
+	bool m_needsReclustering = false;
+
     /**
      * @brief Updates KMeans algorithm with input object positions
      * @param inObjects Input audio objects
