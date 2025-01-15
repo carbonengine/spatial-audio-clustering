@@ -174,7 +174,7 @@ We welcome all contributions, whether they're feature requests, bug fixes, docum
 
 This project is licensed under the [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0).
 
-Copyright 2024 CCP Games
+Copyright 2025 CCP Games
 
 Important:  
 - This plugin references Audiokinetic’s Wwise SDK but does not include or distribute it.
