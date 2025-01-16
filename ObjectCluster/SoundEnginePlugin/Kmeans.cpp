@@ -36,8 +36,7 @@ void KMeans::initializeCentroids(const std::vector<ObjectPosition>& objects) {
     std::vector<ObjectMetadata> objectsMetadata;
     objectsMetadata.reserve(objects.size());
 
-    // Calculate local density including origin region
-    const float densityRadius = m_distanceThreshold * 0.5f;
+    const float densityRadius = m_distanceThreshold * m_originRadius;
     const float densityRadiusSq = densityRadius * densityRadius;
 
     // Track density around origin specifically
@@ -51,7 +50,8 @@ void KMeans::initializeCentroids(const std::vector<ObjectPosition>& objects) {
         float distToOriginSq = m_utilities.GetDistanceSquared(obj.position, AkVector{ 0,0,0 });
         if (distToOriginSq < densityRadiusSq) {
             nearOriginObjects.push_back(&obj);
-            originDensity += calculateGaussianWeight(distToOriginSq, densityRadiusSq);
+            // Apply weight multiplier to origin density calculation
+            originDensity += calculateGaussianWeight(distToOriginSq, densityRadiusSq) * m_originWeight;
         }
 
         // Calculate local density relative to other points
@@ -73,17 +73,19 @@ void KMeans::initializeCentroids(const std::vector<ObjectPosition>& objects) {
 
     centroids.clear();
 
-    // If we have significant density near origin, calculate optimal centroid position
-    if (!nearOriginObjects.empty()) {
+    // Only consider origin cluster if we have objects AND weight multiplier isn't zero
+    if (!nearOriginObjects.empty() && m_originWeight > 0.0f) {
         AkVector originCluster{ 0,0,0 };
         float totalWeight = 0.0f;
 
         // Calculate weighted average position for objects near origin
         for (const auto* obj : nearOriginObjects) {
+            // Apply weight multiplier to individual object contributions
             float weight = calculateGaussianWeight(
                 m_utilities.GetDistanceSquared(obj->position, AkVector{ 0,0,0 }),
                 densityRadiusSq
-            );
+            ) * m_originWeight;
+
             originCluster.X += obj->position.X * weight;
             originCluster.Y += obj->position.Y * weight;
             originCluster.Z += obj->position.Z * weight;
@@ -116,7 +118,6 @@ void KMeans::initializeCentroids(const std::vector<ObjectPosition>& objects) {
                 float dist = calculateDistance(objectsMetadata[i].object.position, centroid);
                 minDist = std::min(minDist, dist);
             }
-
             if (minDist > maxMinDistance) {
                 maxMinDistance = minDist;
                 bestCandidate = i;
@@ -264,6 +265,20 @@ void KMeans::setMaxDistanceThreshold(float newValue)
 {
     if (newValue != m_maxThreshold) {
         m_maxThreshold = newValue;
+    }
+}
+
+void KMeans::setOriginRadiusMultiplier(float newValue)
+{
+    if (newValue != m_originRadius) {
+        m_originRadius = clamp(newValue, 0.1f, 5.0f);
+    }
+}
+
+void KMeans::setOriginWeightMultiplier(float newValue)
+{
+    if (newValue != m_originWeight) {
+        m_originWeight = clamp(newValue, 0.0f, 5.0f);
     }
 }
 

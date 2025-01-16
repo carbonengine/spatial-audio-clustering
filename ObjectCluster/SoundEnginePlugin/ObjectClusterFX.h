@@ -240,6 +240,8 @@ private:
 	std::vector<AkAudioObject*> m_tempObjects;
 
 	float m_lastDistanceThreshold = -1.0f;
+	float m_lastOriginRadius = -1.0f;
+	float m_lastOriginWeight = -1.0f;
 
 	/// Maps that hold KMeans clustering data
 	std::vector<std::pair<AkVector, std::vector<AkAudioObjectID>>> m_clusters;

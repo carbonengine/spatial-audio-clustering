@@ -111,6 +111,8 @@ private:
     float m_distanceThreshold; ///< Maximum distance for a point to be considered in a cluster.
     float m_minThreshold; ///< Minimun value for the distance threshold.
     float m_maxThreshold; ///< Maximum value for the distance threshold.
+	float m_originRadius; ///< Radius of influence for the origin cluster.
+	float m_originWeight; ///< Weight of the origin cluster.
     std::vector<AkVector> centroids; ///< The centroids of the clusters.
     std::vector<int> labels; ///< Labels assigning each point to a cluster.
     std::vector<std::vector<ObjectPosition>> clusters; ///< The resulting clusters.
@@ -249,6 +251,16 @@ public:
      * @brief Sets the internal maximum distance threshold value.
     */
     void setMaxDistanceThreshold(float newValue);
+
+	/**
+	 * @brief Sets the internal origin radius multiplier value.
+	 */
+	void setOriginRadiusMultiplier(float newValue);
+
+	/**
+	 * @brief Sets the internal origin weight multiplier value.
+	 */
+	void setOriginWeightMultiplier(float newValue);
 
     /**
      * @brief Performs K-means clustering on the given objects.

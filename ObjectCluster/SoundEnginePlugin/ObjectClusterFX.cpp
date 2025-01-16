@@ -75,6 +75,10 @@ AKRESULT ObjectClusterFX::Init(AK::IAkPluginMemAlloc* in_pAllocator, AK::IAkEffe
     m_kmeans->setMinDistanceThreshold(1.f);
     m_kmeans->setMaxDistanceThreshold(1000.f);
 
+	m_lastDistanceThreshold = m_pParams->RTPC.distanceThreshold;
+	m_lastOriginRadius = m_pParams->RTPC.originRadius;
+	m_lastOriginWeight = m_pParams->RTPC.originWeight;
+
     return AK_Success;
 }
 
@@ -385,10 +389,29 @@ void ObjectClusterFX::MixToCluster(const AkAudioObject* inObject, AkAudioBuffer*
 }
 
 void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects) {
-    // Check for threshold change before normal processing
+    // Check for all RTPC changes before normal processing
+    bool parametersChanged = false;
+
     if (m_lastDistanceThreshold != m_pParams->RTPC.distanceThreshold) {
         m_kmeans->setDistanceThreshold(m_pParams->RTPC.distanceThreshold);
         m_lastDistanceThreshold = m_pParams->RTPC.distanceThreshold;
+        parametersChanged = true;
+    }
+
+    if (m_lastOriginRadius != m_pParams->RTPC.originRadius) {
+        m_kmeans->setOriginRadiusMultiplier(m_pParams->RTPC.originRadius);
+        m_lastOriginRadius = m_pParams->RTPC.originRadius;
+        parametersChanged = true;
+    }
+
+    if (m_lastOriginWeight != m_pParams->RTPC.originWeight) {
+        m_kmeans->setOriginWeightMultiplier(m_pParams->RTPC.originWeight);
+        m_lastOriginWeight = m_pParams->RTPC.originWeight;
+        parametersChanged = true;
+    }
+
+    // Force reclustering if any parameter changed
+    if (parametersChanged) {
         ForceReclustering();
     }
 
@@ -398,10 +421,8 @@ void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects) {
     // Check if objects should be clustered based on spatialization mode
     for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i) {
         AkAudioObject* inobj = inObjects.ppObjects[i];
-
         bool shouldCluster = (inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionOnly ||
             inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionAndOrientation);
-
         if (shouldCluster) {
             objectPositions.push_back({ inobj->positioning.threeD.xform.Position(), inobj->key });
         }
@@ -411,10 +432,8 @@ void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects) {
     m_clusters.clear();
     if (!objectPositions.empty()) {
         m_kmeans->performClustering(objectPositions);
-
         auto tempClusters = m_kmeans->getClusters();
         m_clusters.reserve(tempClusters.size());
-
         for (const auto& pair : tempClusters) {
             m_clusters.emplace_back(pair.first, pair.second);
         }
