@@ -33,11 +33,15 @@ the specific language governing permissions and limitations under the License.
 // Add parameters IDs here, those IDs should map to the AudioEnginePropertyID
 // attributes in the xml property definition.
 static const AkPluginParamID DISTANCE_THRESHOLD = 0;
-static const AkUInt32 NUM_PARAMS = 1;
+static const AkPluginParamID ORIGIN_RADIUS = 1;
+static const AkPluginParamID ORIGIN_WEIGHT = 2;
+static const AkUInt32 NUM_PARAMS = 3;
 
 struct ObjectClusterRTPCParams
 {
     AkReal32 distanceThreshold;
+	AkReal32 originRadius;
+	AkReal32 originWeight;
 };
 
 struct ObjectClusterNonRTPCParams

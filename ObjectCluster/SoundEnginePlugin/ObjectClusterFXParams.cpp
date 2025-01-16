@@ -53,7 +53,9 @@ AKRESULT ObjectClusterFXParams::Init(AK::IAkPluginMemAlloc* in_pAllocator, const
     if (in_ulBlockSize == 0)
     {
         // Initialize default parameters here
-        RTPC.distanceThreshold = 200.f;
+        RTPC.distanceThreshold = 100.f;
+		RTPC.originRadius = 1.f;
+		RTPC.originWeight = 1.f;
 
         m_paramChangeHandler.SetAllParamChanges();
         return AK_Success;
@@ -91,6 +93,14 @@ AKRESULT ObjectClusterFXParams::SetParam(AkPluginParamID in_paramID, const void*
     case DISTANCE_THRESHOLD:
         RTPC.distanceThreshold = *((AkReal32*)in_pValue);
         m_paramChangeHandler.SetParamChange(DISTANCE_THRESHOLD);
+        break;
+    case ORIGIN_RADIUS:
+        RTPC.originRadius = *((AkReal32*)in_pValue);
+        m_paramChangeHandler.SetParamChange(ORIGIN_RADIUS);
+        break;
+    case ORIGIN_WEIGHT:
+        RTPC.originWeight = *((AkReal32*)in_pValue);
+        m_paramChangeHandler.SetParamChange(ORIGIN_WEIGHT);
         break;
     default:
         eResult = AK_InvalidParameter;

@@ -29,31 +29,58 @@ See https://www.audiokinetic.com/library/edge/?source=SDK&id=plugin__xml.html
 for the documentation about the plugin xml format
 -->
 <PluginModule>
-  <EffectPlugin Name="ObjectCluster" CompanyID="64" PluginID="6973">
-    <PluginInfo>
-      <PlatformSupport>
-        <Platform Name="Any">
-          <CanBeInsertOnBusses>true</CanBeInsertOnBusses>
-          <CanBeInsertOnAudioObjects>true</CanBeInsertOnAudioObjects>
-          <CanBeRendered>true</CanBeRendered>
-        </Platform>
-      </PlatformSupport>
-    </PluginInfo>
-    <Properties>
-      <!-- Add your property definitions here -->
-      <Property Name="CCP:distanceThreshold" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Distance Threshold">
-        <UserInterface Step="0.1" Fine="0.01" Decimals="5" UIMax="1000" />
-        <DefaultValue>200</DefaultValue>
-        <AudioEnginePropertyID>0</AudioEnginePropertyID>
-        <Restrictions>
-          <ValueRestriction>
-            <Range Type="Real32">
-              <Min>1</Min>
-              <Max>1000</Max>
-            </Range>
-          </ValueRestriction>
-        </Restrictions>
-      </Property>
-    </Properties>
-  </EffectPlugin>
+	<EffectPlugin Name="ObjectCluster" CompanyID="64" PluginID="6973">
+		<PluginInfo>
+			<PlatformSupport>
+				<Platform Name="Any">
+					<CanBeInsertOnBusses>true</CanBeInsertOnBusses>
+					<CanBeInsertOnAudioObjects>true</CanBeInsertOnAudioObjects>
+					<CanBeRendered>true</CanBeRendered>
+				</Platform>
+			</PlatformSupport>
+		</PluginInfo>
+		<Properties>
+			<Property Name="CCP:distanceThreshold" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Distance Threshold">
+				<UserInterface Step="0.1" Fine="0.01" Decimals="5" UIMax="1000" />
+				<DefaultValue>100.0</DefaultValue>
+				<AudioEnginePropertyID>0</AudioEnginePropertyID>
+				<Restrictions>
+					<ValueRestriction>
+						<Range Type="Real32">
+							<Min>0.0</Min>
+							<Max>1000.0</Max>
+						</Range>
+					</ValueRestriction>
+				</Restrictions>
+			</Property>
+
+			<Property Name="CCP:originRadius" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Origin Clustering Radius">
+				<UserInterface Step="0.1" Fine="0.01" Decimals="2" UIMax="5.0" />
+				<DefaultValue>1.0</DefaultValue>
+				<AudioEnginePropertyID>1</AudioEnginePropertyID>
+				<Restrictions>
+					<ValueRestriction>
+						<Range Type="Real32">
+							<Min>0.1</Min>
+							<Max>5.0</Max>
+						</Range>
+					</ValueRestriction>
+				</Restrictions>
+			</Property>
+
+			<Property Name="CCP:originWeight" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Origin Clustering Weight">
+				<UserInterface Step="0.1" Fine="0.01" Decimals="2" UIMax="5.0" />
+				<DefaultValue>1.0</DefaultValue>
+				<AudioEnginePropertyID>2</AudioEnginePropertyID>
+				<Restrictions>
+					<ValueRestriction>
+						<Range Type="Real32">
+							<Min>0.0</Min>
+							<Max>5.0</Max>
+						</Range>
+					</ValueRestriction>
+				</Restrictions>
+			</Property>
+		</Properties>
+	</EffectPlugin>
 </PluginModule>
