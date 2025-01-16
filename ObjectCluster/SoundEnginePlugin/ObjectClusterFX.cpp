@@ -389,7 +389,7 @@ void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects) {
     if (m_lastDistanceThreshold != m_pParams->RTPC.distanceThreshold) {
         m_kmeans->setDistanceThreshold(m_pParams->RTPC.distanceThreshold);
         m_lastDistanceThreshold = m_pParams->RTPC.distanceThreshold;
-        ForceRecluster();
+        ForceReclustering();
     }
 
     std::vector<ObjectPosition> objectPositions;
@@ -407,7 +407,7 @@ void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects) {
         }
     }
 
-    // Perform clustering
+    // Perform clustering only if there are objects
     m_clusters.clear();
     if (!objectPositions.empty()) {
         m_kmeans->performClustering(objectPositions);
