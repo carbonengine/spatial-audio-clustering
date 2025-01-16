@@ -114,8 +114,10 @@ private:
     AK::IAkPluginMemAlloc* m_pAllocator;
     AK::IAkEffectPluginContext* m_pContext;
 
-    void ForceRecluster();
-	bool m_needsReclustering = false;
+    /**
+     * @brief Forces reclustering by clearing current clusters and resetting the KMeans algorithm.
+     */
+    void ForceReclustering();
 
     /**
      * @brief Updates KMeans algorithm with input object positions
@@ -238,6 +240,7 @@ private:
 	std::vector<AkAudioObject*> m_tempObjects;
 
 	float m_lastDistanceThreshold = -1.0f;
+    bool m_needsReclustering = false;
 
 	/// Maps that hold KMeans clustering data
 	std::vector<std::pair<AkVector, std::vector<AkAudioObjectID>>> m_clusters;

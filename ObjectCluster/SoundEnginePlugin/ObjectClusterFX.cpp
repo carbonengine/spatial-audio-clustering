@@ -117,7 +117,7 @@ void ObjectClusterFX::Execute(
     UpdateClusterPositions(inObjects);
 }
 
-void ObjectClusterFX::ForceRecluster()
+void ObjectClusterFX::ForceReclustering()
 {
 	m_clusters.clear();
 

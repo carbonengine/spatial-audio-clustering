@@ -223,7 +223,9 @@ public:
         float minDistanceThreshold = 10.f,
         float maxDistanceThreshold = 1000.f);
 
-
+    /**
+     * @brief Resets the KMeans instance, clearing all clusters and centroids.
+     */
     void reset();
 
     /**
