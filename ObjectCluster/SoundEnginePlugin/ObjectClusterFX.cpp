@@ -117,6 +117,21 @@ void ObjectClusterFX::Execute(
     UpdateClusterPositions(inObjects);
 }
 
+void ObjectClusterFX::ForceReclustering()
+{
+	m_clusters.clear();
+
+    auto it = m_mapInObjsToOutObjs.Begin();
+    while (it != m_mapInObjsToOutObjs.End()) {
+        if ((*it).pUserData && (*it).pUserData->isClustered) {
+            (*it).pUserData->isClustered = false;
+        }
+        ++it;
+    }
+
+	m_kmeans->reset();
+}
+
 void ObjectClusterFX::PrepareAudioObjects(const AkAudioObjects& inObjects)
 {
     FeedPositionsToKMeans(inObjects);
@@ -369,21 +384,21 @@ void ObjectClusterFX::MixToCluster(const AkAudioObject* inObject, AkAudioBuffer*
     AKPLATFORM::AkMemCpy(pGeneratedObject->volumeMatrix, currentVolumes, uTransmixSize);
 }
 
-void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects)
-{
-
+void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects) {
+    // Check for threshold change before normal processing
     if (m_lastDistanceThreshold != m_pParams->RTPC.distanceThreshold) {
         m_kmeans->setDistanceThreshold(m_pParams->RTPC.distanceThreshold);
         m_lastDistanceThreshold = m_pParams->RTPC.distanceThreshold;
+        ForceReclustering();
     }
 
     std::vector<ObjectPosition> objectPositions;
     objectPositions.reserve(inObjects.uNumObjects);
 
+    // Check if objects should be clustered based on spatialization mode
     for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i) {
         AkAudioObject* inobj = inObjects.ppObjects[i];
 
-        // Check if this is either position-only or position+orientation
         bool shouldCluster = (inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionOnly ||
             inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionAndOrientation);
 
@@ -391,6 +406,7 @@ void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects)
             objectPositions.push_back({ inobj->positioning.threeD.xform.Position(), inobj->key });
         }
     }
+
     // Perform clustering only if there are objects
     m_clusters.clear();
     if (!objectPositions.empty()) {

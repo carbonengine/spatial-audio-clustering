@@ -224,6 +224,11 @@ public:
         float maxDistanceThreshold = 1000.f);
 
     /**
+     * @brief Resets the KMeans instance, clearing all clusters and centroids.
+     */
+    void reset();
+
+    /**
      * @brief Sets the convergence tolerance.
      * @param newValue The new tolerance value.
      */

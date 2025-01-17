@@ -115,6 +115,11 @@ private:
     AK::IAkEffectPluginContext* m_pContext;
 
     /**
+     * @brief Forces reclustering by clearing current clusters and resetting the KMeans algorithm.
+     */
+    void ForceReclustering();
+
+    /**
      * @brief Updates KMeans algorithm with input object positions
      * @param inObjects Input audio objects
      */
