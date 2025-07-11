@@ -338,9 +338,13 @@ void ObjectClusterFX::ProcessUnclustered(
     AkAudioObject* outObj,
     AkAudioBuffer* outBuf) {
 
+    if (outObj == nullptr || inBuf == nullptr || outBuf == nullptr) {
+        return;
+    }
+
     m_utilities->CopyBuffer(inBuf, outBuf);
     outObj->positioning.threeD.xform.SetPosition(inObj->positioning.threeD.xform.Position());
-    outObj->arCustomMetadata.Copy(inObj->arCustomMetadata);
+
     outBuf->eState = inBuf->eState;
     outBuf->uValidFrames = inBuf->uValidFrames;
     outObj->SetName(m_pAllocator, "Not clustered");

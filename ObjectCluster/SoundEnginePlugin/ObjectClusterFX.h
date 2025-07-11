@@ -40,6 +40,7 @@ trademarks of CCP ehf.
 #include <unordered_map>
 #include "KMeans.h"
 #include "Utilities.h"
+#include <memory>
 
 /**
  * @struct GeneratedObject
