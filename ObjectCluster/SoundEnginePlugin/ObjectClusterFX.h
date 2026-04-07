@@ -34,6 +34,7 @@ trademarks of CCP ehf.
 #define ObjectClusterFX_H
 
 #include "ObjectClusterFXParams.h"
+#include <AK/SoundEngine/Common/AkAudioObject.h>
 #include <AK/Plugin/PluginServices/AkMixerInputMap.h>
 #include <set>
 #include <string>

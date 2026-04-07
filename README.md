@@ -1,7 +1,7 @@
 # Spatial Audio Object Clustering Plugin for Wwise
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Wwise SDK](https://img.shields.io/badge/Wwise%20SDK-2022.1%2B-green.svg)](https://www.audiokinetic.com/download/)
+[![Wwise SDK](https://img.shields.io/badge/Wwise%20SDK-2025.1%2B-green.svg)](https://www.audiokinetic.com/download/)
 
 ## Overview
 
@@ -9,14 +9,14 @@ The Object Cluster is a Wwise plugin developed to dynamically group and manage s
 
 Unlike traditional Effect Plug-Ins which are agnostic to Audio Objects, Object Processors have direct control over Audio Objects (AkAudioObject) passing through a bus, enabling the processing of their metadata and spatial characteristics.
 
-## 🛠️ Key Features
+## Key Features
 
-- **Dynamic Object Clustering**: Automatically groups nearby spatial audio objects in real-time using our modification of the K-means clustering algorithm
+- **Dynamic Object Clustering**: Automatically groups nearby spatial audio objects in real-time using a density-aware, threshold-constrained spatial clustering algorithm
 - **Resource Optimization**: Significantly reduces active audio object count while preserving spatial accuracy
 - **Configurable Distance Threshold**: Fine-tune clustering radius through Wwise UI to match your game's spatial requirements
 - **Adaptive Cluster Management**: Automatically adjusts cluster count based on scene complexity and handles rapid object movement
 
-## 🎯 Perfect For
+## Perfect For
 
 - Large-scale battle scenes with multiple sound sources
 - Particle system audio (rain, debris, ambient effects)
@@ -24,13 +24,13 @@ Unlike traditional Effect Plug-Ins which are agnostic to Audio Objects, Object P
 - Dense environmental sound design
 - Vehicle/machinery sounds with multiple components
 
-## 🔍 Why We Built This
+## Why We Built This
 
 Most spatial audio endpoints (Dolby, Sonic, DTS) offer up to 128 concurrent spatial audio objects. In EVE Online and Frontier's massive space battles, these resources get depleted rapidly, as each spaceship generates multiple audio objects - from engine thrusters and weapon turrets to missile launchers and various combat effects.
 
 Therefore, we developed this tool with the main goal of mixing/grouping all sounds within a certain radius without sacrificing spatialization, since the objects being mixed are very close to each other.
 
-## 🎮 In-Game Impact
+## In-Game Impact
 
 ### Without Plugin
 ![Before Clustering](https://github.com/user-attachments/assets/7782ff8f-1e5e-4326-8b58-f78d59cbdbd0)
@@ -48,7 +48,7 @@ Same scene with plugin enabled:
 - Clear, distinct spatial positioning for each cluster
 - More resources for sound designers to add unique locations of spatialized objects
 
-## 🎧 Best Practices
+## Best Practices
 
 ### Bus Architecture
 - Place the plugin stategicaly in busses that need clustering (e.g turrets, missiles, engines)
@@ -67,7 +67,7 @@ Same scene with plugin enabled:
 To place breakpoints and debug the plugin follow the steps [here](https://www.audiokinetic.com/qa/7840/wwise-sdk-how-step-through-code-using-visual-studio-debugger)
 
 
-## 🔧 Technical Deep Dive
+## Technical Deep Dive
 
 ### How It Works
 
@@ -84,33 +84,26 @@ To place breakpoints and debug the plugin follow the steps [here](https://www.au
    - Smooth transitions prevent audio artifacts when objects change clusters
    - Interpolation for rapid position changes of input objects in clusters
 
-### K-means Algorithm Implementation
+### Clustering Algorithm
 
-Our modified K-means clustering algorithm is specifically optimized for 3D audio object clustering:
+For the purpose of this project we developed a density-aware spatial clustering algorithm for real-time 3D audio. Given a set of audio object positions and a distance threshold, it groups nearby objects into clusters each frame and represents each cluster as a single output object at the group's centroid.
 
-1. **Initialization Phase**:
-   - Determines maximum clusters based on square root of total objects
-   - Analyzes density patterns and establishes initial centroids using k-means++ selection
+1. **Initialization**:
+   Initial cluster centers are picked based on local object density using Gaussian weighting, biased toward the listener position. Additional centers are placed using K-means++ and selection stops early if all remaining objects are already within range of an existing center.
 
-2. **Assignment Phase**:
-   - Assigns objects to nearest centroids within threshold
-   - Maintains pool of unassigned objects
+2. **Assignment**:
+   Each object is assigned to its nearest cluster center if it falls within the distance threshold. Objects too far from any center are grouped with other nearby distant objects to form new clusters.
 
-3. **Update Phase**:
-   - Recalculates positions and removes empty clusters
-   - Forms new clusters from unassigned object groups
+3. **Refinement**:
+   Cluster centers are recalculated as the average position of their members. Empty clusters are removed. The algorithm iterates until assignments stabilize or SSE improvement becomes negligible.
 
-4. **Convergence**:
-   - Iterates until clusters stabilize
-   - Ensures performance with maximum iteration limit
-
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
 #### Required Software
-- Visual Studio 2019 or 2022 (not VSCode)
-- Wwise 2022.1+ (2021 may work but is untested)
+- Visual Studio 2022 (not VSCode)
+- Wwise 2025.1+
 - Python 3
 
 #### Environment Setup
@@ -120,18 +113,13 @@ Our modified K-means clustering algorithm is specifically optimized for 3D audio
 - Optional environment variables:
   - `CUSTOM_WWISE_PLUGIN_DLL_PATH` for automatic DLL copying
 
-#### Visual Studio 2019 Requirements
-- Desktop development with C++ workload
-- MSVC v142 - VS 2019 C++ x64/x86 build tools
-- C++ ATL for latest v142 build tools (x86 & x64)
-- C++ MFC for latest v142 build tools (x86 & x64)
-- Windows Universal CRT SDK
-- Windows 10 SDK (10.0.20348.0)
- - Different version can be specified in PremakePlugin.lua
-
 #### Visual Studio 2022 Requirements
-- Same components as VS 2019 but with v143 versions
-- Note: Requires Wwise 2022.1.5 or later
+- Desktop development with C++ workload
+- MSVC v143 - VS 2022 C++ x64/x86 build tools
+- C++ ATL for latest v143 build tools (x86 & x64)
+- C++ MFC for latest v143 build tools (x86 & x64)
+- Windows Universal CRT SDK
+- Windows 10/11 SDK
 
 #### Wwise SDK Requirements
 - SDKs for your target deployment platforms (install via Wwise Launcher)
@@ -149,11 +137,11 @@ py -3 %WWISEROOT%\Scripts\Build\Plugins\wp.py premake Authoring_Windows
 ```
 
 3. Build the required solutions:
-   - `ObjectCluster_Windows_vc150_static.sln` (Static library)
-   - `ObjectCluster_Windows_vc150_shared.sln` (Runtime DLL)
-   - `ObjectCluster_Authoring_Windows_vc150.sln` (Authoring DLL)
+   - `ObjectCluster_Windows_vc170_static.sln` (Static library)
+   - `ObjectCluster_Windows_vc170_shared.sln` (Runtime DLL)
+   - `ObjectCluster_Authoring_Windows_vc170.sln` (Authoring DLL)
 
-## 🤝 Contributing
+## Contributing
 
 ### Opening an Issue
 - Search through existing open and closed issues before creating a new one
@@ -168,7 +156,7 @@ py -3 %WWISEROOT%\Scripts\Build\Plugins\wp.py premake Authoring_Windows
 
 We welcome all contributions, whether they're feature requests, bug fixes, documentation improvements, or new functionality.
 
-## 📄 License
+## License
 
 This project is licensed under the [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0).
 
