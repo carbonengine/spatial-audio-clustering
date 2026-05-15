@@ -57,8 +57,8 @@ AkAudioObjectID Utilities::CreateOutputObject(const AkAudioObject* inobj, const 
 {
     AkAudioObjectID outputObjKey = AK_INVALID_AUDIO_OBJECT_ID;
     AkUInt32 numObjsOut = 1;
-    // Allocate space for a new output object
-    AkAudioObject* newObject = (AkAudioObject*)AkAlloca(sizeof(AkAudioObject*));
+    // CreateOutputObjects allocates the object and fills this slot
+    AkAudioObject* newObject = nullptr;
     AkAudioObjects outputObjects;
     outputObjects.uNumObjects = numObjsOut;
     outputObjects.ppObjectBuffers = nullptr;
