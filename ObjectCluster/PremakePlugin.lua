@@ -114,13 +114,33 @@ Plugin.authoring.defines =
 {
 }
 
-if os.getenv("CUSTOM_WWISE_PLUGIN_DLL_PATH") then 
+if os.getenv("CCP_EVE_PERFORCE_BRANCH_PATH") then
+    local wwiseVersion = os.getenv("WWISEROOT"):match("Wwise([%d%.]+)")
+    local authoringDest = "$(CCP_EVE_PERFORCE_BRANCH_PATH)\\carbon\\tools\\audiotools\\Authoring\\x64\\Release\\bin\\Plugins"
+    local runtimeDest = "$(CCP_EVE_PERFORCE_BRANCH_PATH)\\vendor\\wwise\\" .. wwiseVersion .. "\\bin\\$(TargetPlatformIdentifier)\\$(Platform)\\$(PlatformToolset)\\$(Configuration)"
     Plugin.sdk.shared.custom = function()
         postbuildcommands
         {
-            "{ECHO} Copying DLLs to $(CUSTOM_WWISE_PLUGIN_DLL_PATH)...",
-            "{MKDIR} $(CUSTOM_WWISE_PLUGIN_DLL_PATH)\\$(TargetPlatformIdentifier)\\$(Platform)\\$(PlatformToolset)\\$(Configuration)\\",
-            "{COPYFILE} %{cfg.buildtarget.abspath} $(CUSTOM_WWISE_PLUGIN_DLL_PATH)\\$(TargetPlatformIdentifier)\\$(Platform)\\$(PlatformToolset)\\$(Configuration)\\"
+            "{ECHO} Installing runtime DLL to P4 branch...",
+            "{MKDIR} " .. runtimeDest,
+            "attrib -r " .. runtimeDest .. "\\ObjectCluster.dll 2>nul",
+            "{COPYFILE} %{cfg.buildtarget.abspath} " .. runtimeDest .. "\\",
+            "p4 reconcile " .. runtimeDest .. "\\ObjectCluster.dll 2>nul & echo."
+        }
+    end
+
+    Plugin.authoring.custom = function()
+        postbuildcommands
+        {
+            "{ECHO} Installing authoring plugin to P4 branch...",
+            "{MKDIR} " .. authoringDest,
+            "attrib -r " .. authoringDest .. "\\ObjectCluster.dll 2>nul",
+            "attrib -r " .. authoringDest .. "\\ObjectCluster.lib 2>nul",
+            "attrib -r " .. authoringDest .. "\\ObjectCluster.xml 2>nul",
+            "copy /Y $(TargetPath) " .. authoringDest .. "\\",
+            "copy /Y $(TargetDir)$(TargetName).lib " .. authoringDest .. "\\",
+            "copy /Y $(TargetDir)ObjectCluster.xml " .. authoringDest .. "\\",
+            "p4 reconcile " .. authoringDest .. "\\ObjectCluster.dll " .. authoringDest .. "\\ObjectCluster.lib " .. authoringDest .. "\\ObjectCluster.xml 2>nul & echo."
         }
     end
 end
