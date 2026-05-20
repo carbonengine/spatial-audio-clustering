@@ -1,7 +1,7 @@
 # Spatial Audio Object Clustering Plugin for Wwise
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Wwise SDK](https://img.shields.io/badge/Wwise%20SDK-2022.1%2B-green.svg)](https://www.audiokinetic.com/download/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.txt)
+[![Wwise SDK](https://img.shields.io/badge/Wwise%20SDK-2025.1%2B-green.svg)](https://www.audiokinetic.com/download/)
 
 ## Overview
 
@@ -168,13 +168,10 @@ py -3 %WWISEROOT%\Scripts\Build\Plugins\wp.py premake Authoring_Windows
 
 We welcome all contributions, whether they're feature requests, bug fixes, documentation improvements, or new functionality.
 
-## 📄 License
+## 📄 License and Legal Notices
 
-This project is licensed under the [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0).
+© 2024 - present CCP ehf.
 
-Copyright (c) 2024 - present CCP ehf.
+This software was developed by CCP Games for spatial audio object clustering in EVE Online and EVE Frontier, using the Audiokinetic Wwise SDK.
 
-This software was developed by CCP Games for spatial audio object clustering in EVE Online and EVE Frontier.
-While it is released under the Apache License 2.0, please note that this does not grant any rights to CCP Games' trademarks or game content.
-
-Built on the Audiokinetic Wwise SDK.
+This project is licensed under the [Apache License 2.0](LICENSE.txt).
