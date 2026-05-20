@@ -351,7 +351,8 @@ void KMeans::setDistanceThreshold(float newValue) {
 }
 
 void KMeans::performClustering(const std::vector<ObjectPosition>& objects, unsigned int max_iterations) {
-    labels.resize(objects.size(), -1);
+    sse_values.clear();
+    labels.assign(objects.size(), -1);
     maxClusters = determineMaxClusters(objects.size());
     initializeCentroids(objects);
 
