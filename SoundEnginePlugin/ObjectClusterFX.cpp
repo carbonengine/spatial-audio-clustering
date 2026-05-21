@@ -51,7 +51,7 @@ ObjectClusterFX::ObjectClusterFX()
     : m_pParams(nullptr)
     , m_pAllocator(nullptr)
     , m_pContext(nullptr)
-    , m_kmeans(std::make_unique<KMeans>())
+    , m_clusterer(std::make_unique<SpatialClusterer>())
     , m_utilities(std::make_unique<Utilities>())
 {
 }
@@ -72,8 +72,8 @@ AKRESULT ObjectClusterFX::Init(AK::IAkPluginMemAlloc* in_pAllocator, AK::IAkEffe
 
     // Set min-max values for the distance threshold
     // These are specific to eve & frontier ships, adjust accordingly
-    m_kmeans->setMinDistanceThreshold(1.f);
-    m_kmeans->setMaxDistanceThreshold(1000.f);
+    m_clusterer->setMinDistanceThreshold(1.f);
+    m_clusterer->setMaxDistanceThreshold(1000.f);
 
     return AK_Success;
 }
@@ -119,7 +119,7 @@ void ObjectClusterFX::Execute(
 
 void ObjectClusterFX::PrepareAudioObjects(const AkAudioObjects& inObjects)
 {
-    FeedPositionsToKMeans(inObjects);
+    FeedPositionsToClusterer(inObjects);
     std::unordered_map<const std::pair<AkVector, std::vector<AkAudioObjectID>>*, AkAudioObjectID> clusterOutputObjects;
 
     // Get current outputs at start
@@ -171,7 +171,7 @@ void ObjectClusterFX::PrepareAudioObjects(const AkAudioObjects& inObjects)
                 inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionAndOrientation);
 
             if (isPositionedObject) {
-                // Find which cluster this object belongs to from KMeans results
+                // Find which cluster this object belongs to
                 const std::pair<AkVector, std::vector<AkAudioObjectID>>* assignedCluster = nullptr;
                 for (const auto& cluster : m_clusters) {
                     auto it = std::find(cluster.second.begin(), cluster.second.end(), key);
@@ -369,11 +369,11 @@ void ObjectClusterFX::MixToCluster(const AkAudioObject* inObject, AkAudioBuffer*
     AKPLATFORM::AkMemCpy(pGeneratedObject->volumeMatrix, currentVolumes, uTransmixSize);
 }
 
-void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects)
+void ObjectClusterFX::FeedPositionsToClusterer(const AkAudioObjects& inObjects)
 {
 
     if (m_lastDistanceThreshold != m_pParams->RTPC.distanceThreshold) {
-        m_kmeans->setDistanceThreshold(m_pParams->RTPC.distanceThreshold);
+        m_clusterer->setDistanceThreshold(m_pParams->RTPC.distanceThreshold);
         m_lastDistanceThreshold = m_pParams->RTPC.distanceThreshold;
     }
 
@@ -394,9 +394,9 @@ void ObjectClusterFX::FeedPositionsToKMeans(const AkAudioObjects& inObjects)
     // Perform clustering only if there are objects
     m_clusters.clear();
     if (!objectPositions.empty()) {
-        m_kmeans->performClustering(objectPositions);
+        m_clusterer->performClustering(objectPositions);
 
-        auto tempClusters = m_kmeans->getClusters();
+        auto tempClusters = m_clusterer->getClusters();
         m_clusters.reserve(tempClusters.size());
 
         for (const auto& pair : tempClusters) {

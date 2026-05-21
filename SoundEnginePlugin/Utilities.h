@@ -26,6 +26,7 @@
 #pragma once
 
 #include <AK/SoundEngine/Common/AkTypes.h>
+#include <AK/SoundEngine/Common/AkAudioObject.h>
 #include "ObjectClusterFXParams.h"
 #include <vector>
 

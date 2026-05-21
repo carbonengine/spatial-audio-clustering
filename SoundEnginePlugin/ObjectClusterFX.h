@@ -34,11 +34,12 @@ trademarks of CCP ehf.
 #define ObjectClusterFX_H
 
 #include "ObjectClusterFXParams.h"
+#include <AK/SoundEngine/Common/AkAudioObject.h>
 #include <AK/Plugin/PluginServices/AkMixerInputMap.h>
 #include <set>
 #include <string>
 #include <unordered_map>
-#include "KMeans.h"
+#include "SpatialClustering.h"
 #include "Utilities.h"
 
 /**
@@ -115,10 +116,10 @@ private:
     AK::IAkEffectPluginContext* m_pContext;
 
     /**
-     * @brief Updates KMeans algorithm with input object positions
+     * @brief Updates the clusterer with input object positions
      * @param inObjects Input audio objects
      */
-    void FeedPositionsToKMeans(const AkAudioObjects& inObjects);
+    void FeedPositionsToClusterer(const AkAudioObjects& inObjects);
 
     /**
      * @brief Prepares audio objects for processing
@@ -229,14 +230,14 @@ private:
      */
     void FreeAllVolumes();
 
-	std::unique_ptr<KMeans> m_kmeans;
+	std::unique_ptr<SpatialClusterer> m_clusterer;
 	std::unique_ptr<Utilities> m_utilities;
 	std::vector<AkAudioBuffer*> m_tempBuffers;
 	std::vector<AkAudioObject*> m_tempObjects;
 
 	float m_lastDistanceThreshold = -1.0f;
 
-	/// Maps that hold KMeans clustering data
+	/// Maps that hold clustering data
 	std::vector<std::pair<AkVector, std::vector<AkAudioObjectID>>> m_clusters;
 
 	/// Maps input objects to their corresponding output objects and processing information
