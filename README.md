@@ -5,7 +5,7 @@
 
 ## Overview
 
-This wwise plugin is a performance optimisation tool developed to dynamically group and manage spatial audio objects based on their proximity, helping optimize and reduce system audio object consumption in computentionally demanding scenarios.
+This Wwise plugin is a performance optimization tool developed to dynamically group and manage spatial audio objects based on their proximity, helping optimize and reduce system audio object consumption in computationally demanding scenarios.
 
 Unlike traditional Effect Plug-Ins which are agnostic to Audio Objects, Object Processors have direct control over Audio Objects (AkAudioObject) passing through a bus, enabling the processing of their metadata and spatial characteristics.
 
@@ -31,7 +31,7 @@ Therefore, we developed this tool with the main goal of mixing/grouping all soun
 
 ### Results
 We internally tested this with EVE Online and Frontier where this plugin acts now as a part of our engine.
-In some cases we did find massive performance gains up to 60% CPU performance gains in intense battles.
+In some cases we found CPU performance gains of up to 60% in intense battles.
 
 ## In-Game Impact
 
@@ -54,14 +54,14 @@ Same scene with plugin enabled:
 ## Best Practices
 
 ### Bus Architecture
-- Place the plugin stategicaly in busses that need clustering (e.g turrets, missiles, engines)
+- Place the plugin strategically in busses that need clustering (e.g. turrets, missiles, engines)
 - Use tighter clustering for dense sources (turret fire) vs spread-out sounds (shields)
 
 ![Wwise_wZagotM3pz](https://github.com/user-attachments/assets/88c217c1-87c9-4132-aba8-04eede2d46e1)
 
 ### Profiling
-- In Audio Devices -> System monitor the system audio object consuption in real-time
-- From the Wwise Authoring tool use Views->Profiler->Audio Object 3D Viewer profiler  for a visual spatial representation of the clusters
+- In Audio Devices -> System monitor the system audio object consumption in real-time
+- From the Wwise Authoring tool use Views->Profiler->Audio Object 3D Viewer profiler for a visual spatial representation of the clusters
 - Go to Views->Profiler->Audio Object List and select different busses to change the focus of the Audio Object 3D Viewer
 
 ![Wwise_TWJ1fyWlc5](https://github.com/user-attachments/assets/d46c84bb-196e-4c2a-b932-62920066b516)
@@ -83,7 +83,7 @@ To place breakpoints and debug the plugin follow the steps [here](https://www.au
 2. **Dynamic Clustering**:
    - Number of clusters is automatically determined based on number of input objects per frame
    - Clusters are created and destroyed dynamically as objects move
-   - Clustering merging ensures clusters from previous frames merge with current frames if within radius
+   - Cluster merging ensures clusters from previous frames merge with current frames if within radius
    - Smooth transitions prevent audio artifacts when objects change clusters
    - Interpolation for rapid position changes of input objects in clusters
 
@@ -106,7 +106,7 @@ For the purpose of this project we developed a density-aware spatial clustering 
 
 #### Required Software
 - A C++ toolchain supported by Wwise's plugin build system
-- Wwise 2025.1+ (it will work for previous version although you might need to adapt some of the code)
+- Wwise 2025.1+ (it will work for previous versions although you might need to adapt some of the code)
 - Python 3
 
 ### Building from Source
