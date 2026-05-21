@@ -5,13 +5,13 @@
 
 ## Overview
 
-The Spatial Clustering plugin dynamically groups and manages spatial audio objects based on their proximity, reducing system audio object consumption in computationally demanding scenarios.
+The Spatial Clustering plugin dynamically groups audio objects by proximity, reducing system audio object consumption in computationally demanding scenarios.
 
 Unlike traditional Effect Plug-Ins which are agnostic to Audio Objects, Object Processors have direct control over Audio Objects (AkAudioObject) passing through a bus, enabling the processing of their metadata and spatial characteristics.
 
 ## Features
 
-- **Dynamic Object Clustering**: Automatically groups nearby spatial audio objects in real-time using a density-aware spatial clustering algorithm
+- **Dynamic Object Clustering**: Automatically groups nearby spatial audio objects in real-time using a density-aware clustering algorithm
 - **Resource Optimization**: Significantly reduces active audio object count while preserving spatial accuracy
 - **Adaptive Cluster Management**: Automatically adjusts cluster count based on scene complexity and handles rapid object movement
 
@@ -69,22 +69,20 @@ Same scene with plugin enabled:
 To place breakpoints and debug the plugin follow the steps [here](https://www.audiokinetic.com/qa/7840/wwise-sdk-how-step-through-code-using-visual-studio-debugger)
 
 
-## Technical Deep Dive
+## Implementation
 
-### How It Works
+### Object Management
+- Objects within a defined distance threshold are grouped into clusters
+- Each cluster is represented by a single spatial output audio object positioned at the cluster's centroid
+- Each input object's buffer is mixed into a single output buffer using Wwise's `MixNinNChannels()` API
+- Objects that are too far from any cluster or don't have spatialization remain independent
 
-1. **Object Management**: 
-   - Objects within a defined distance threshold are grouped into clusters
-   - Each cluster is represented by a single spatial output audio object positioned at the cluster's centroid
-   - Each input object's buffer is mixed into a single output buffer using Wwise's `MixNinNChannels()` API
-   - Objects that are too far from any cluster or don't have spatialization remain independent
-
-2. **Dynamic Clustering**:
-   - Number of clusters is automatically determined based on number of input objects per frame
-   - Clusters are created and destroyed dynamically as objects move
-   - Cluster merging ensures clusters from previous frames merge with current frames if within radius
-   - Smooth transitions prevent audio artifacts when objects change clusters
-   - Interpolation for rapid position changes of input objects in clusters
+### Dynamic Clustering
+- Number of clusters is automatically determined based on number of input objects per frame
+- Clusters are created and destroyed dynamically as objects move
+- Cluster merging ensures clusters from previous frames merge with current frames if within radius
+- Smooth transitions prevent audio artifacts when objects change clusters
+- Interpolation for rapid position changes of input objects in clusters
 
 ### Clustering Algorithm
 
@@ -101,9 +99,10 @@ For the purpose of this project we developed a density-aware spatial clustering 
 
 ## Getting Started
 
+See Audiokinetic's [Creating Audio Plug-ins](https://www.audiokinetic.com/en/public-library/2025.1.7_9143/?source=SDK&id=effectplugin_tools_newplugin.html) for the full toolchain setup (SDK install, environment variables, compiler requirements).
+
 ### Prerequisites
 
-#### Required Software
 - A C++ toolchain supported by Wwise's plugin build system
 - Wwise 2025.1+ (it will work for previous versions although you might need to adapt some of the code)
 - Python 3
