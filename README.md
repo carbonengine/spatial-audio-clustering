@@ -131,7 +131,7 @@ We welcome contributions: feature requests, bug fixes, documentation improvement
 
 ### Submitting a Pull Request
 - Fork the repository and create a feature branch
-- Build and test your changes at runtime before submitting. We test anything that ships into our production pipeline anyway, but doing this on your end shows genuine interest and keeps code quality high
+- Build and test your changes at runtime before submitting.
 - Submit a PR with a clear description of what changed and why
 
 ### Building and Testing Your Changes
@@ -139,7 +139,7 @@ We welcome contributions: feature requests, bug fixes, documentation improvement
 Wwise offers a free personal license that includes the C++ SDK and CLI tools needed to build this plugin. To get started, see [Creating Audio Plug-ins](https://www.audiokinetic.com/en/public-library/2025.1.7_9143/?source=SDK&id=effectplugin_tools_newplugin.html) in the Wwise docs.
 
 Once the plugin builds, you'll want a scene to exercise it in. A few options:
-- **Unreal Engine 5 or Unity** with the Wwise integration. Both are first-class supported by Audiokinetic.
+- **Unreal Engine 5 or Unity** with the Wwise integration.
 - **[Wwise Integration Demo Sample](https://www.audiokinetic.com/en/public-library/2025.1.7_9143/?source=SDK&id=soundengine_integration_samplecode.html)**: a lightweight executable with various demos that you can build and modify yourself.
 - **[Wwise sample games](https://www.audiokinetic.com/en/learning/samples/?searchToken=eyJwZ0Nfc2FtIjoiMSIsInBnU19zYW0iOiIxMDAiLCJzYW1fc3QiOiIifQ%3D%3D)** provided by Audiokinetic.
 
