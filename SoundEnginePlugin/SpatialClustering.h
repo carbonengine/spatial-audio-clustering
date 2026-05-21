@@ -91,9 +91,12 @@ struct ObjectMetadata {
  *    threshold. Objects too far from any center are grouped with other nearby distant objects to
  *    form new clusters.
  * 3. **Update Step:** Cluster centers are recalculated as the average position of their members.
- *    Empty clusters are removed. Iteration continues until assignments stabilize or the change in
- *    Sum of Squared Errors (SSE) drops below the tolerance, up to a maximum iteration count.
- * 4. **Result:** A dynamic set of clusters, each represented by its centroid. The number of
+ *    Empty clusters are removed, and new clusters may form from unassigned points if they are
+ *    sufficiently close together.
+ * 4. **Convergence:** This iterative process continues until either cluster assignments stabilize,
+ *    the change in Sum of Squared Errors (SSE) falls below the tolerance threshold, or the maximum
+ *    iterations are reached.
+ * 5. **Result:** A dynamic set of clusters, each represented by its centroid. The number of
  *    clusters varies based on the spatial distribution of inputs and the distance threshold.
  */
 
