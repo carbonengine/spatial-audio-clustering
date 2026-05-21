@@ -20,17 +20,17 @@
  * EVE Online and EVE Frontier are registered trademarks of CCP ehf.
  */
 
-#include "KMeans.h"
+#include "SpatialClustering.h"
 
 template <typename T>
 T clamp(T value, T min, T max) {
     return std::max(min, std::min(max, value));
 }
-unsigned int KMeans::determineMaxClusters(unsigned int numObjects) {
+unsigned int SpatialClusterer::determineMaxClusters(unsigned int numObjects) {
     return static_cast<unsigned int>(std::sqrt(numObjects));
 }
 
-void KMeans::initializeCentroids(const std::vector<ObjectPosition>& objects) {
+void SpatialClusterer::initializeCentroids(const std::vector<ObjectPosition>& objects) {
     if (objects.empty()) return;
 
     std::vector<ObjectMetadata> objectsMetadata;
@@ -132,11 +132,11 @@ void KMeans::initializeCentroids(const std::vector<ObjectPosition>& objects) {
     }
 }
 
-float KMeans::calculateDistance(const AkVector& a, const AkVector& b) const {
+float SpatialClusterer::calculateDistance(const AkVector& a, const AkVector& b) const {
     return std::sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y) + (a.Z - b.Z) * (a.Z - b.Z));
 }
 
-bool KMeans::assignPointsToClusters(const std::vector<ObjectPosition>& objects) {
+bool SpatialClusterer::assignPointsToClusters(const std::vector<ObjectPosition>& objects) {
     if (objects.empty()) return false;
 
     bool changed = false;
@@ -213,7 +213,7 @@ bool KMeans::assignPointsToClusters(const std::vector<ObjectPosition>& objects) 
     return changed;
 }
 
-void KMeans::adjustClusterCount() {
+void SpatialClusterer::adjustClusterCount() {
     // Remove empty clusters
     auto it = std::remove_if(clusters.begin(), clusters.end(),
         [](const std::vector<ObjectPosition>& cluster) { return cluster.empty(); });
@@ -248,26 +248,26 @@ void KMeans::adjustClusterCount() {
     }
 }
 
-float KMeans::calculateGaussianWeight(float distanceSquared, float radiusSquared) const
+float SpatialClusterer::calculateGaussianWeight(float distanceSquared, float radiusSquared) const
 {
     return std::exp(-distanceSquared / (2.0f * radiusSquared));
 }
 
-void KMeans::setMinDistanceThreshold(float newValue)
+void SpatialClusterer::setMinDistanceThreshold(float newValue)
 {
     if (newValue != m_minThreshold) {
         m_minThreshold = newValue;
     }
 }
 
-void KMeans::setMaxDistanceThreshold(float newValue)
+void SpatialClusterer::setMaxDistanceThreshold(float newValue)
 {
     if (newValue != m_maxThreshold) {
         m_maxThreshold = newValue;
     }
 }
 
-bool KMeans::updateCentroids() {
+bool SpatialClusterer::updateCentroids() {
     if (clusters.empty()) return false;
 
     bool changed = false;
@@ -296,7 +296,7 @@ bool KMeans::updateCentroids() {
     return changed;
 }
 
-void KMeans::adjustClusterCount(unsigned int numObjects) {
+void SpatialClusterer::adjustClusterCount(unsigned int numObjects) {
     if (numObjects == 0) {
         return;
     }
@@ -304,7 +304,7 @@ void KMeans::adjustClusterCount(unsigned int numObjects) {
     centroids.resize(maxClusters);
 }
 
-float KMeans::calculateSSE() const {
+float SpatialClusterer::calculateSSE() const {
     float sse = 0.0f;
     for (size_t i = 0; i < clusters.size(); ++i) {
         for (const auto& obj : clusters[i]) {
@@ -315,7 +315,7 @@ float KMeans::calculateSSE() const {
     return sse;
 }
 
-AkVector KMeans::calculateCentroid(const std::vector<ObjectPosition>& cluster)
+AkVector SpatialClusterer::calculateCentroid(const std::vector<ObjectPosition>& cluster)
 {
     AkVector centroid = { 0, 0, 0 };
     if (cluster.empty()) return centroid;
@@ -332,7 +332,7 @@ AkVector KMeans::calculateCentroid(const std::vector<ObjectPosition>& cluster)
     return centroid;
 }
 
-KMeans::KMeans(float tolerance, float distanceThreshold, float minDistanceThreshold, float maxDistanceThreshold)
+SpatialClusterer::SpatialClusterer(float tolerance, float distanceThreshold, float minDistanceThreshold, float maxDistanceThreshold)
     : m_tolerance(tolerance),
     m_distanceThreshold(distanceThreshold),
     m_minThreshold(minDistanceThreshold),
@@ -342,15 +342,15 @@ KMeans::KMeans(float tolerance, float distanceThreshold, float minDistanceThresh
     seed = rd();
 }
 
-void KMeans::setTolerance(float newValue) {
+void SpatialClusterer::setTolerance(float newValue) {
     m_tolerance = clamp(newValue, 0.001f, 1.0f);
 }
 
-void KMeans::setDistanceThreshold(float newValue) {
+void SpatialClusterer::setDistanceThreshold(float newValue) {
     m_distanceThreshold = clamp(newValue, m_minThreshold, m_maxThreshold);
 }
 
-void KMeans::performClustering(const std::vector<ObjectPosition>& objects, unsigned int max_iterations) {
+void SpatialClusterer::performClustering(const std::vector<ObjectPosition>& objects, unsigned int max_iterations) {
     labels.resize(objects.size(), -1);
     maxClusters = determineMaxClusters(objects.size());
     initializeCentroids(objects);
@@ -374,15 +374,15 @@ void KMeans::performClustering(const std::vector<ObjectPosition>& objects, unsig
     adjustClusterCount();
 }
 
-const std::vector<int>& KMeans::getLabels() const {
+const std::vector<int>& SpatialClusterer::getLabels() const {
     return labels;
 }
 
-const std::vector<AkVector>& KMeans::getCentroids() const {
+const std::vector<AkVector>& SpatialClusterer::getCentroids() const {
     return centroids;
 }
 
-std::map<AkVector, std::vector<AkAudioObjectID>> KMeans::getClusters() const {
+std::map<AkVector, std::vector<AkAudioObjectID>> SpatialClusterer::getClusters() const {
     std::map<AkVector, std::vector<AkAudioObjectID>> clusterMap;
 
     for (const auto& cluster : clusters) {

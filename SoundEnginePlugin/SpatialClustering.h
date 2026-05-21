@@ -77,32 +77,27 @@ struct ObjectMetadata {
 };
 
 /**
- * @brief Implements the K-means clustering algorithm for audio objects in 3D space.
+ * @brief Density-aware spatial clustering for audio objects in 3D space.
  *
- * K-means clustering is an unsupervised machine learning algorithm that groups similar data points
- * into a specified number (K) of clusters. It achieves this by iteratively assigning each data point
- * to the cluster with the nearest mean (centroid) and then recalculating the cluster means until convergence.
- * K-means is commonly used in data classification and pattern recognition.
+ * Given a set of audio object positions and a distance threshold, this groups nearby objects into
+ * clusters each frame and represents each cluster by a single centroid. Cluster count is derived
+ * from input density and seeding favors high-density regions and the listener position.
  *
- * In the context of our use case, we adapt the algorithm to work in 3D space for audio object clustering.
- * The implemented algorithm follows these steps:
- * 1. **Initialization:** Determines centroids based on local density, with special handling for objects
- *    near the origin. Additional centroids are selected using k-means++ approach, maximizing distances
- *    between centroids while respecting a distance threshold.
- * 2. **Assignment:** Each audio object is assigned to the nearest centroid if within the specified
- *    distance threshold. Objects beyond the threshold are marked as unassigned.
- * 3. **Update Step:** The centroid of each cluster is recalculated as the average position of all
- *    audio objects assigned to it. Empty clusters are removed, and new clusters may form from
- *    unassigned points if they are sufficiently close together.
- * 4. **Convergence:** This iterative process continues until either cluster assignments stabilize,
- *    the change in Sum of Squared Errors (SSE) falls below the tolerance threshold, or the maximum
- *    iterations are reached.
- * 5. **Result:** The final result is a dynamic set of clusters, each represented by its centroid
- *    position. The number of clusters can vary based on the spatial distribution of audio objects
- *    and the distance threshold constraints.
+ * 1. **Initialization:** Initial cluster centers are picked based on local object density using
+ *    Gaussian weighting, biased toward the listener position. Additional centers are placed using
+ *    K-means++ and selection stops early once all remaining objects are within range of an existing
+ *    center.
+ * 2. **Assignment:** Each object is assigned to its nearest cluster center if within the distance
+ *    threshold. Objects too far from any center are grouped with other nearby distant objects to
+ *    form new clusters.
+ * 3. **Update Step:** Cluster centers are recalculated as the average position of their members.
+ *    Empty clusters are removed. Iteration continues until assignments stabilize or the change in
+ *    Sum of Squared Errors (SSE) drops below the tolerance, up to a maximum iteration count.
+ * 4. **Result:** A dynamic set of clusters, each represented by its centroid. The number of
+ *    clusters varies based on the spatial distribution of inputs and the distance threshold.
  */
 
-class KMeans {
+class SpatialClusterer {
 private:
 
     unsigned int maxClusters; ///< Maximum number of clusters.
@@ -123,7 +118,7 @@ private:
      * @brief Retrieves points that couldn't be assigned to any cluster due to distance constraints.
      * @return A const reference to the vector of unassigned object positions.
      */
-    const std::vector<ObjectPosition>& KMeans::getUnassignedPoints() const {
+    const std::vector<ObjectPosition>& getUnassignedPoints() const {
         return unassignedPoints;
     }
 
@@ -135,8 +130,8 @@ private:
     unsigned int determineMaxClusters(unsigned int numObjects);
 
     /**
-     * @brief Initializes the centroids for the K-means algorithm.
-     * @param points The points to initialize centroids from.
+     * @brief Initializes the cluster centers.
+     * @param objects The objects to initialize centers from.
      */
     void initializeCentroids(const std::vector<ObjectPosition>& objects);
 
@@ -214,11 +209,11 @@ private:
 
 public:
     /**
-     * @brief Constructs a KMeans instance.
+     * @brief Constructs a SpatialClusterer instance.
      * @param tolerance The convergence tolerance.
      * @param distanceThreshold The maximum distance for a point to be in a cluster.
      */
-    KMeans(float tolerance = 0.01f,
+    SpatialClusterer(float tolerance = 0.01f,
         float distanceThreshold = 100.0f,
         float minDistanceThreshold = 10.f,
         float maxDistanceThreshold = 1000.f);
@@ -246,7 +241,7 @@ public:
     void setMaxDistanceThreshold(float newValue);
 
     /**
-     * @brief Performs K-means clustering on the given objects.
+     * @brief Performs spatial clustering on the given objects.
      * @param objects The objects to cluster.
      * @param max_iterations The maximum number of iterations.
      */
