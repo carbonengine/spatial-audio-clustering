@@ -5,7 +5,7 @@
 
 ## Overview
 
-This Wwise plugin is a performance optimization tool developed to dynamically group and manage spatial audio objects based on their proximity, helping optimize and reduce system audio object consumption in computationally demanding scenarios.
+The Spatial Clustering plugin dynamically groups and manages spatial audio objects based on their proximity, reducing system audio object consumption in computationally demanding scenarios.
 
 Unlike traditional Effect Plug-Ins which are agnostic to Audio Objects, Object Processors have direct control over Audio Objects (AkAudioObject) passing through a bus, enabling the processing of their metadata and spatial characteristics.
 
@@ -25,13 +25,12 @@ Unlike traditional Effect Plug-Ins which are agnostic to Audio Objects, Object P
 
 ## Why We Built This
 
-Most spatial audio endpoints (Dolby, Sonic, DTS) offer up to 128 concurrent spatial audio objects. In EVE Online and Frontier's massive space battles, these resources get depleted rapidly, as each spaceship generates multiple audio objects - from engine thrusters and weapon turrets to missile launchers and various combat effects.
+Most spatial audio endpoints (Dolby, Sonic, DTS) offer up to 128 concurrent spatial audio objects. In EVE Online and Frontier's massive space battles, these resources get depleted rapidly, as each spaceship generates multiple audio objects for its engines, turrets, missile launchers, and combat effects.
 
-Therefore, we developed this tool with the main goal of mixing/grouping all sounds within a certain radius without sacrificing spatialization, since the objects being mixed are very close to each other. 
+We developed this plugin to mix nearby sources into a single output positioned at their centroid. Human spatial resolution is limited at small angular separations, so a listener can't really tell several close sources apart from one source at the average position. The freed audio object slots then become available for sounds elsewhere in the scene.
 
 ### Results
-We internally tested this with EVE Online and Frontier where this plugin acts now as a part of our engine.
-In some cases we found CPU performance gains of up to 60% in intense battles.
+The plugin ships as part of the EVE Online and EVE Frontier audio engine. In intense battles we measured up to 60% reduction in audio thread CPU usage.
 
 ## In-Game Impact
 
