@@ -29,5 +29,5 @@ the specific language governing permissions and limitations under the License.
 
 #include <AK/Tools/Common/AkAssert.h>
 
-DEFINEDUMMYASSERTHOOK;
+DEFINE_PLUGIN_ASSERT_HOOK;
 DEFINE_PLUGIN_REGISTER_HOOK;

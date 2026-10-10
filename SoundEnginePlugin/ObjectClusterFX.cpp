@@ -32,7 +32,13 @@ trademarks of CCP ehf.
 
 #include "ObjectClusterFX.h"
 #include "../ObjectClusterConfig.h"
+
 #include <AK/AkWwiseSDKVersion.h>
+#include <AK/SoundEngine/Common/AkHashTableFuncs.h>
+#include <AK/Tools/Common/AkMurMurHash.h>
+#include <AK/Tools/Common/AkPlatformFuncs.h>
+
+#include <cmath>
 
 AK::IAkPlugin* CreateObjectClusterFX(AK::IAkPluginMemAlloc* in_pAllocator)
 {
@@ -46,53 +52,286 @@ AK::IAkPluginParam* CreateObjectClusterFXParams(AK::IAkPluginMemAlloc* in_pAlloc
 
 AK_IMPLEMENT_PLUGIN_FACTORY(ObjectClusterFX, AkPluginTypeEffect, ObjectClusterConfig::CompanyID, ObjectClusterConfig::PluginID)
 
+namespace
+{
+    /** @brief Number of inputs and outputs that Init reserves memory for. */
+    const AkUInt32 kInitialCapacity = 64;
+
+    /** @brief Time constant in seconds of the input loudness smoothing. */
+    const AkReal32 kLoudnessTimeConstant = 0.05f;
+
+    /** @brief Minimum time in seconds between two monitor messages of the same kind. */
+    const AkReal32 kMessageIntervalSeconds = 5.f;
+
+    /** @brief Angular radius in degrees of a cluster whose spread is 1, since a spread of 0.5 covers 180 degrees. */
+    const AkReal32 kFullSpreadRadius = 180.f;
+
+    /** @brief Name of passthrough outputs whose input has no name. */
+    const char kPassthroughName[] = "Passthrough";
+
+    /** @brief Start of the name of cluster outputs. */
+    const char kClusterNamePrefix[] = "Cluster ";
+
+    /** @brief Message posted when the plug-in is not on a bus. */
+    const char kNotOnBusMessage[] = "ObjectCluster only runs on busses. Insert it on an Audio Objects bus.";
+
+    /** @brief Message posted when the bus is not an Audio Objects bus. */
+    const char kNotObjectBusMessage[] = "ObjectCluster is not on an Audio Objects bus, so there is nothing to cluster and the bus signal passes through. Set the bus channel configuration to Audio Objects.";
+
+    /** @brief Message posted when a plug-in service is missing. */
+    const char kMissingServiceMessage[] = "ObjectCluster could not get the hash table service from the sound engine.";
+
+    /** @brief Message posted when output objects cannot be created. */
+    const char kCreateFailedMessage[] = "ObjectCluster could not create output objects, so some inputs are silent.";
+
+    /** @brief Message posted when memory runs out. */
+    const char kOutOfMemoryMessage[] = "ObjectCluster ran out of memory, so some audio may drop out.";
+
+    /** @brief Message posted when the inputs that are left cannot be merged down to Max Outputs. */
+    const char kOverBudgetMessage[] = "ObjectCluster needs more outputs than Max Outputs allows because the remaining inputs cannot be merged (passthrough inputs, excluded inputs or different custom metadata).";
+
+    /** @brief Returns a value limited to a range. */
+    template <typename T>
+    T Clamp(T in_value, T in_min, T in_max)
+    {
+        return in_value < in_min ? in_min : (in_value > in_max ? in_max : in_value);
+    }
+
+    /** @brief Converts a time in milliseconds to a number of frames, rounded to the nearest frame. */
+    AkUInt32 MillisecondsToFrames(AkReal32 in_fMilliseconds, AkReal32 in_fFrameSeconds)
+    {
+        return static_cast<AkUInt32>(in_fMilliseconds * 0.001f / in_fFrameSeconds + 0.5f);
+    }
+
+    /** @brief Returns true for mono inputs that are fully spatialized in 3D. */
+    bool IsClusterable(const AkAudioObject& in_object, const AkAudioBuffer& in_buffer)
+    {
+        const AkBehavioralPositioningData& behavioral = in_object.positioning.behavioral;
+        const Ak3DSpatializationMode spatMode = behavioral.spatMode;
+        return in_buffer.NumChannels() == 1
+            && (spatMode == AK_SpatializationMode_PositionOnly || spatMode == AK_SpatializationMode_PositionAndOrientation)
+            && behavioral.panSpatMix >= 1.f;
+    }
+
+    /** @brief Returns the RMS level of the first channel over the valid frames. */
+    AkReal32 ComputeRms(AkAudioBuffer& in_buffer)
+    {
+        const AkUInt32 uFrames = in_buffer.uValidFrames;
+        if (uFrames == 0)
+            return 0.f;
+
+        const AkSampleType* pSamples = in_buffer.GetChannel(0);
+        AkReal32 fSum = 0.f;
+        for (AkUInt32 i = 0; i < uFrames; ++i)
+            fSum += pSamples[i] * pSamples[i];
+
+        const AkReal32 fRms = std::sqrt(fSum / static_cast<AkReal32>(uFrames));
+        return std::isfinite(fRms) ? fRms : 0.f;
+    }
+
+    /** @brief Returns a hash of the custom metadata plug-in types that does not depend on their order, or 0 when there is none. */
+    AkUInt32 HashCustomMetadata(const AkAudioObject& in_object)
+    {
+        const AkAudioObject::ArrayCustomMetadata& metadata = in_object.arCustomMetadata;
+        if (metadata.IsEmpty())
+            return 0;
+
+        AkUInt64 uSum = 0;
+        for (AkAudioObject::ArrayCustomMetadata::Iterator it = metadata.Begin(); it != metadata.End(); ++it)
+            uSum += AkHashMurMurMix64(static_cast<AkUInt64>((*it).pluginID));
+
+        const AkUInt32 uHash = static_cast<AkUInt32>(uSum ^ (uSum >> 32));
+        return uHash != 0 ? uHash : 1;
+    }
+
+    /** @brief Adds one channel to another with a gain that ramps linearly over the frames. */
+    void MixRamp(const AkSampleType* in_pInput, AkSampleType* io_pOutput, AkUInt32 in_uFrames, AkReal32 in_fGainStart, AkReal32 in_fGainEnd)
+    {
+        if (in_uFrames == 0)
+            return;
+
+        const AkReal32 fStep = (in_fGainEnd - in_fGainStart) / static_cast<AkReal32>(in_uFrames);
+        for (AkUInt32 i = 0; i < in_uFrames; ++i)
+            io_pOutput[i] += in_pInput[i] * (in_fGainStart + fStep * static_cast<AkReal32>(i));
+    }
+
+    /** @brief Writes "Cluster <id>" into a character array. */
+    template <AkUInt32 N>
+    void FormatClusterName(AkUInt32 in_uId, char (&out_szName)[N])
+    {
+        AkUInt32 uLength = 0;
+        for (const char* pChar = kClusterNamePrefix; *pChar != '\0' && uLength + 1 < N; ++pChar)
+            out_szName[uLength++] = *pChar;
+
+        char aDigits[10];
+        AkUInt32 uNumDigits = 0;
+        do
+        {
+            aDigits[uNumDigits++] = static_cast<char>('0' + in_uId % 10);
+            in_uId /= 10;
+        } while (in_uId != 0);
+
+        while (uNumDigits > 0 && uLength + 1 < N)
+            out_szName[uLength++] = aDigits[--uNumDigits];
+
+        out_szName[uLength] = '\0';
+    }
+
+    /** @brief Returns the slot of a key in a hash table, or -1 when the key is missing. */
+    template <typename ValueType>
+    AkInt32 FindSlot(const AK::AkHashTable<AkUInt64, ValueType>& in_table, AkUInt64 in_uKey)
+    {
+        return AK::HashTable::GetFirstSlotForKey<AkUInt64>(&in_table, in_uKey);
+    }
+
+    /** @brief Returns true if a hash table holds memory. */
+    bool HasMemory(const AK::AkHashTableBase<AkUInt64>& in_table)
+    {
+        return in_table.pKeys != nullptr || in_table.uNumReservedEntries != 0;
+    }
+}
+
+void ObjectClusterAllocator::Init(AK::IAkPluginMemAlloc* in_pAllocator)
+{
+    m_pAllocator = in_pAllocator;
+}
+
+void* ObjectClusterAllocator::Alloc(size_t in_size)
+{
+    if (m_pAllocator == nullptr)
+        return nullptr;
+
+    return AK_PLUGIN_ALLOC(m_pAllocator, in_size);
+}
+
+void ObjectClusterAllocator::Free(void* in_pBlock)
+{
+    if (m_pAllocator != nullptr && in_pBlock != nullptr)
+        AK_PLUGIN_FREE(m_pAllocator, in_pBlock);
+}
 
 ObjectClusterFX::ObjectClusterFX()
     : m_pParams(nullptr)
     , m_pAllocator(nullptr)
     , m_pContext(nullptr)
-    , m_clusterer(std::make_unique<SpatialClusterer>())
-    , m_utilities(std::make_unique<Utilities>())
+    , m_pPriorityService(nullptr)
+    , m_pHashTableService(nullptr)
+    , m_bEngineInitialized(false)
+    , m_fSpreadFromSize(1.f)
+    , m_uSampleRate(0)
+    , m_uParamsMaxFrames(0)
+    , m_uMessageInterval(1)
+    , m_uFrame(0)
+    , m_uNumOutputs(0)
+    , m_aMessageFrames{}
+    , m_aMessagePosted{}
 {
 }
 
 ObjectClusterFX::~ObjectClusterFX()
 {
-    FreeAllVolumes();
 }
 
-AKRESULT ObjectClusterFX::Init(AK::IAkPluginMemAlloc* in_pAllocator, AK::IAkEffectPluginContext* in_pContext, AK::IAkPluginParam* in_pParams, AkAudioFormat& in_rFormat)
+AKRESULT ObjectClusterFX::Init(AK::IAkPluginMemAlloc* in_pAllocator, AK::IAkEffectPluginContext* in_pContext, AK::IAkPluginParam* in_pParams, AkAudioFormat& io_rFormat)
 {
-    m_pParams = (ObjectClusterFXParams*)in_pParams;
-    m_mapInObjsToOutObjs.Init(in_pAllocator);
-    m_pContext = in_pContext;
+    m_pParams = static_cast<ObjectClusterFXParams*>(in_pParams);
     m_pAllocator = in_pAllocator;
+    m_pContext = in_pContext;
 
-    in_rFormat.channelConfig.SetObject();
+    if (in_pContext->GetMixerCtx() == nullptr)
+    {
+        in_pContext->PostMonitorMessage(kNotOnBusMessage, AK::Monitor::ErrorLevel_Error);
+        return AK_Fail;
+    }
 
-    // Set min-max values for the distance threshold
-    // These are specific to eve & frontier ships, adjust accordingly
-    m_clusterer->setMinDistanceThreshold(1.f);
-    m_clusterer->setMaxDistanceThreshold(1000.f);
+    if (io_rFormat.channelConfig.eConfigType != AK_ChannelConfigType_Objects)
+        in_pContext->PostMonitorMessage(kNotObjectBusMessage, AK::Monitor::ErrorLevel_Error);
 
+    io_rFormat.channelConfig.SetObject();
+
+    AK::IAkGlobalPluginContext* pGlobalContext = in_pContext->GlobalContext();
+    m_pPriorityService = AK_GET_PLUGIN_SERVICE_AUDIO_OBJECT_PRIORITY(pGlobalContext);
+    m_pHashTableService = AK_GET_PLUGIN_SERVICE_HASHTABLE(pGlobalContext);
+    if (m_pHashTableService == nullptr)
+    {
+        in_pContext->PostMonitorMessage(kMissingServiceMessage, AK::Monitor::ErrorLevel_Error);
+        return AK_Fail;
+    }
+
+    m_uSampleRate = pGlobalContext->GetSampleRate();
+    if (m_uSampleRate == 0)
+        m_uSampleRate = io_rFormat.uSampleRate;
+
+    m_inputs.Init(in_pAllocator);
+    m_inputPriorities.Init(in_pAllocator);
+    m_requests.Init(in_pAllocator);
+    m_newObjects.Init(in_pAllocator);
+    m_outputObjects.Init(in_pAllocator);
+    m_outputBuffers.Init(in_pAllocator);
+    m_clusterOutputs.Init(in_pAllocator);
+    m_clusterValidFrames.Init(in_pAllocator);
+    m_clusterHasData.Init(in_pAllocator);
+    m_outputWritten.Init(in_pAllocator);
+    m_priorityObjects.Init(in_pAllocator);
+    m_priorityValues.Init(in_pAllocator);
+
+    const bool bArraysReserved = m_inputs.Reserve(kInitialCapacity) == AK_Success
+        && m_inputPriorities.Reserve(kInitialCapacity) == AK_Success
+        && m_requests.Reserve(kInitialCapacity) == AK_Success
+        && m_newObjects.Reserve(kInitialCapacity) == AK_Success
+        && m_outputObjects.Reserve(kInitialCapacity + 1) == AK_Success
+        && m_outputBuffers.Reserve(kInitialCapacity + 1) == AK_Success
+        && m_clusterOutputs.Reserve(kInitialCapacity) == AK_Success
+        && m_clusterValidFrames.Reserve(kInitialCapacity) == AK_Success
+        && m_clusterHasData.Reserve(kInitialCapacity) == AK_Success
+        && m_outputWritten.Reserve(kInitialCapacity + 1) == AK_Success
+        && m_priorityObjects.Reserve(kInitialCapacity) == AK_Success
+        && m_priorityValues.Reserve(kInitialCapacity) == AK_Success;
+
+    const bool bTablesReserved = bArraysReserved
+        && m_pHashTableService->Init(&m_passthroughs, in_pAllocator, kInitialCapacity) == AK_Success
+        && m_pHashTableService->Init(&m_clusters, in_pAllocator, kInitialCapacity) == AK_Success
+        && m_pHashTableService->Init(&m_outputIndices, in_pAllocator, kInitialCapacity) == AK_Success;
+
+    m_engineAllocator.Init(in_pAllocator);
+    m_bEngineInitialized = bTablesReserved;
+    if (!bTablesReserved || !m_engine.Init(&m_engineAllocator, kInitialCapacity))
+    {
+        ReleaseMemory();
+        return AK_InsufficientMemory;
+    }
+
+    m_uParamsMaxFrames = 0;
     return AK_Success;
 }
 
 AKRESULT ObjectClusterFX::Term(AK::IAkPluginMemAlloc* in_pAllocator)
 {
-    FreeAllVolumes();
-
+    ReleaseMemory();
     AK_PLUGIN_DELETE(in_pAllocator, this);
     return AK_Success;
 }
 
 AKRESULT ObjectClusterFX::Reset()
 {
-    FreeAllVolumes();
-    m_clusters.clear();
-    m_tempBuffers.clear();
-    m_tempObjects.clear();
+    if (m_bEngineInitialized)
+        m_engine.Reset();
 
+    if (m_pHashTableService != nullptr)
+    {
+        if (HasMemory(m_passthroughs))
+            m_pHashTableService->Reset(&m_passthroughs);
+        if (HasMemory(m_clusters))
+            m_pHashTableService->Reset(&m_clusters);
+        if (HasMemory(m_outputIndices))
+            m_pHashTableService->Reset(&m_outputIndices);
+    }
+
+    m_requests.RemoveAll();
+    m_priorityObjects.RemoveAll();
+    m_priorityValues.RemoveAll();
+    m_uNumOutputs = 0;
+    m_uParamsMaxFrames = 0;
     return AK_Success;
 }
 
@@ -102,481 +341,559 @@ AKRESULT ObjectClusterFX::GetPluginInfo(AkPluginInfo& out_rPluginInfo)
     out_rPluginInfo.bIsInPlace = false;
     out_rPluginInfo.bCanProcessObjects = true;
     out_rPluginInfo.uBuildVersion = AK_WWISESDK_VERSION_COMBINED;
-
     return AK_Success;
 }
 
-void ObjectClusterFX::Execute(
-    const AkAudioObjects& inObjects, 
-    const AkAudioObjects& outObjects
-) {
-    AKASSERT(inObjects.uNumObjects > 0);
-
-    PrepareAudioObjects(inObjects);
-    ProcessAudioObjects(inObjects);
-    UpdateClusterPositions(inObjects);
-}
-
-void ObjectClusterFX::PrepareAudioObjects(const AkAudioObjects& inObjects)
+void ObjectClusterFX::Execute(const AkAudioObjects& in_objects, const AkAudioObjects& out_objects)
 {
-    FeedPositionsToClusterer(inObjects);
-    std::unordered_map<const std::pair<AkVector, std::vector<AkAudioObjectID>>*, AkAudioObjectID> clusterOutputObjects;
+    ++m_uFrame;
 
-    // Get current outputs at start
-    AkAudioObjects existingOutputs = GetCurrentOutputObjects();
+    const AkUInt32 uExistingOutputs = out_objects.uNumObjects;
+    const AkUInt16 uMaxFrames = in_objects.uNumObjects > 0
+        ? in_objects.ppObjectBuffers[0]->MaxFrames()
+        : m_pContext->GlobalContext()->GetMaxBufferLength();
+    UpdateClusterParams(uMaxFrames);
 
-    // Update existing objects and map clusters to existing outputs
-    for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i) {
-        AkAudioObject* inobj = inObjects.ppObjects[i];
-        AkAudioObjectID key = inobj->key;
-        GeneratedObject* pEntry = m_mapInObjsToOutObjs.Exists(key);
-        if (pEntry) {
-            pEntry->index = i;
-        }
-    }
-
-    // For each cluster, try to find if any of its objects are using an existing output
-    if (existingOutputs.uNumObjects > 0) {
-        for (const auto& cluster : m_clusters) {
-            for (const auto& objId : cluster.second) {
-                GeneratedObject* pEntry = m_mapInObjsToOutObjs.Exists(objId);
-                if (pEntry && pEntry->isClustered) {
-                    // Verify this output still exists
-                    for (AkUInt32 i = 0; i < existingOutputs.uNumObjects; i++) {
-                        if (existingOutputs.ppObjects[i] &&
-                            existingOutputs.ppObjects[i]->key == pEntry->outputObjKey) {
-                            clusterOutputObjects[&cluster] = pEntry->outputObjKey;
-                            break;
-                        }
-                    }
-                    if (clusterOutputObjects.find(&cluster) != clusterOutputObjects.end()) {
-                        break;  // Found valid output for this cluster
-                    }
-                }
-            }
-        }
-    }
-
-    // Handle new objects
-    for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i) {
-        AkAudioObject* inobj = inObjects.ppObjects[i];
-        AkAudioObjectID key = inobj->key;
-
-        GeneratedObject* pEntry = m_mapInObjsToOutObjs.Exists(key);
-        if (!pEntry) {  // Only handle new objects
-            pEntry = m_mapInObjsToOutObjs.AddInput(key);
-            if (!pEntry) continue;
-
-            bool isPositionedObject = (inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionOnly ||
-                inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionAndOrientation);
-
-            if (isPositionedObject) {
-                // Find which cluster this object belongs to
-                const std::pair<AkVector, std::vector<AkAudioObjectID>>* assignedCluster = nullptr;
-                for (const auto& cluster : m_clusters) {
-                    auto it = std::find(cluster.second.begin(), cluster.second.end(), key);
-                    if (it != cluster.second.end()) {
-                        assignedCluster = &cluster;
-                        break;
-                    }
-                }
-
-                if (assignedCluster) {
-                    // Check if we have an existing output for this cluster
-                    auto outputObjIt = clusterOutputObjects.find(assignedCluster);
-                    if (outputObjIt != clusterOutputObjects.end()) {
-                        // Use existing cluster output
-                        pEntry->outputObjKey = outputObjIt->second;
-                        pEntry->isClustered = true;
-                    }
-                    else {
-                        // Create new output for this cluster
-                        pEntry->outputObjKey = m_utilities->CreateOutputObject(inobj, inObjects, i, m_pContext, &assignedCluster->first);
-                        clusterOutputObjects[assignedCluster] = pEntry->outputObjKey;
-                        pEntry->isClustered = true;
-                    }
-                }
-                else {
-                    // Try to find nearest existing cluster
-                    AkAudioObjectID bestClusterKey;
-                    if (FindBestCluster(inobj->positioning.threeD.xform.Position(), existingOutputs, bestClusterKey) == AK_Success) {
-                        pEntry->outputObjKey = bestClusterKey;
-                        pEntry->isClustered = true;
-                    }
-                    else {
-                        // Only mark as unclustered if we really can't find a suitable cluster
-                        pEntry->outputObjKey = m_utilities->CreateOutputObject(inobj, inObjects, i, m_pContext, nullptr);
-                        pEntry->isClustered = false;
-                    }
-                }
-            }
-            else {
-                // Not a spatial object - create unclustered output
-                pEntry->outputObjKey = m_utilities->CreateOutputObject(inobj, inObjects, i, m_pContext, nullptr);
-                pEntry->isClustered = false;
-            }
-            pEntry->index = i;
-        }
-    }
-
-    m_tempBuffers.clear();
-    m_tempObjects.clear();
-}
-
-void ObjectClusterFX::ProcessAudioObjects(const AkAudioObjects& inObjects)
-{
-    if (inObjects.uNumObjects == 0) {
-        return;
-    }
-
-    AkAudioObjects outputObjects = GetCurrentOutputObjects();
-
-    if (outputObjects.uNumObjects > 0) {
-        auto clusterStates = ReadClusterStates(inObjects);
-        m_utilities->ClearBuffers(outputObjects);
-
-        auto it = m_mapInObjsToOutObjs.Begin();
-        while (it != m_mapInObjsToOutObjs.End()) {
-            if ((*it).pUserData && (*it).pUserData->index >= 0) {
-                AkAudioObject* inObj = inObjects.ppObjects[(*it).pUserData->index];
-                AkAudioBuffer* inBuf = inObjects.ppObjectBuffers[(*it).pUserData->index];
-
-                // Find matching output object
-                AkAudioObject* outObj = nullptr;
-                AkAudioBuffer* outBuf = nullptr;
-
-                for (AkUInt32 i = 0; i < outputObjects.uNumObjects; i++) {
-                    if (outputObjects.ppObjects[i] &&
-                        (*it).pUserData->outputObjKey != AK_INVALID_AUDIO_OBJECT_ID &&
-                        outputObjects.ppObjects[i]->key == (*it).pUserData->outputObjKey) {
-                        outObj = outputObjects.ppObjects[i];
-                        outBuf = outputObjects.ppObjectBuffers[i];
-                        break;
-                    }
-                }
-
-                // Process if output was found
-                if (outObj && outBuf) {
-                    if ((*it).pUserData->isClustered) {
-                        ProcessClusteredObject(
-                            inObj,
-                            inBuf,
-                            outObj,
-                            outBuf,
-                            (*it).pUserData,
-                            clusterStates[(*it).pUserData->outputObjKey]);
-                    }
-                    else {
-                        ProcessUnclustered(
-                            inObj,
-                            inBuf,
-                            outObj,
-                            outBuf);
-                    }
-                }
-
-                (*it).pUserData->index = -1;
-                ++it;
-            }
-            else {
-
-                if ((*it).pUserData && (*it).pUserData->volumeMatrix) {
-                    FreeVolume((*it).pUserData->volumeMatrix);
-                }
-                it = m_mapInObjsToOutObjs.EraseSwap(it);
-            }
-        }
-    }
-
-    m_tempBuffers.clear();
-    m_tempObjects.clear();
-}
-
-void ObjectClusterFX::ProcessClusteredObject(
-    const AkAudioObject* inObj,
-    AkAudioBuffer* inBuf,
-    AkAudioObject* outObj,
-    AkAudioBuffer* outBuf,
-    GeneratedObject* userData,
-    const ClusterState& clusterState)
-{
-
-    if (inBuf->uValidFrames > 0) {
-        MixToCluster(inObj, inBuf, outBuf, inObj->cumulativeGain, userData);
-    }
-
-    // Set clustered object's name
-    std::string objName = "Cluster" + std::to_string(userData->outputObjKey);
-    outObj->SetName(m_pAllocator, objName.c_str());
-
-    // Update buffer state
-    bool allInputsDone = (clusterState.activeInputCount == 0);
-    bool hasValidFrames = (clusterState.maxFrames > 0);
-
-    outBuf->eState = (allInputsDone && !hasValidFrames) ? AK_NoMoreData : AK_DataReady;
-    outBuf->uValidFrames = hasValidFrames ? clusterState.maxFrames : 0;
-}
-
-void ObjectClusterFX::ProcessUnclustered(
-    const AkAudioObject* inObj,
-    AkAudioBuffer* inBuf,
-    AkAudioObject* outObj,
-    AkAudioBuffer* outBuf) {
-
-    m_utilities->CopyBuffer(inBuf, outBuf);
-    outObj->positioning.threeD.xform.SetPosition(inObj->positioning.threeD.xform.Position());
-    outObj->arCustomMetadata.Copy(inObj->arCustomMetadata);
-    outBuf->eState = inBuf->eState;
-    outBuf->uValidFrames = inBuf->uValidFrames;
-    outObj->SetName(m_pAllocator, "Not clustered");
-}
-
-void ObjectClusterFX::MixToCluster(const AkAudioObject* inObject, AkAudioBuffer* inBuffer, AkAudioBuffer* outBuffer, const AkRamp& cumulativeGain, GeneratedObject* pGeneratedObject)
-{
-    if (inBuffer->uValidFrames == 0 || inBuffer->NumChannels() == 0 || outBuffer->NumChannels() == 0) {
-        return;
-    }
-
-    AkUInt32 uTransmixSize = AK::SpeakerVolumes::Matrix::GetRequiredSize(inBuffer->NumChannels(), outBuffer->NumChannels());
-
-    AK::SpeakerVolumes::MatrixPtr currentVolumes = (AK::SpeakerVolumes::MatrixPtr)AkAllocaSIMD(uTransmixSize);
-    AK::SpeakerVolumes::Matrix::Zero(currentVolumes, inBuffer->NumChannels(), outBuffer->NumChannels());
-
-    AKRESULT result = m_pContext->GetMixerCtx()->ComputePositioning(
-        inObject->positioning,
-        inBuffer->GetChannelConfig(),
-        outBuffer->GetChannelConfig(),
-        currentVolumes
-    );
-
-    // If mixVolumes doesn't exist, allocate and set it to the current volumes
-    if (pGeneratedObject->volumeMatrix == nullptr) {
-        AKRESULT eResult = AllocateVolumes(pGeneratedObject->volumeMatrix, inBuffer->NumChannels(), outBuffer->NumChannels());
-        if (eResult == AK_Success) {
-            AKPLATFORM::AkMemCpy(pGeneratedObject->volumeMatrix, currentVolumes, uTransmixSize);
-        }
-    }
-
-    AK_GET_PLUGIN_SERVICE_MIXER(m_pContext->GlobalContext())->MixNinNChannels(
-        inBuffer,
-        outBuffer,
-        cumulativeGain.fPrev,
-        cumulativeGain.fNext,
-        pGeneratedObject->volumeMatrix,
-        currentVolumes
-    );
-
-    AKPLATFORM::AkMemCpy(pGeneratedObject->volumeMatrix, currentVolumes, uTransmixSize);
-}
-
-void ObjectClusterFX::FeedPositionsToClusterer(const AkAudioObjects& inObjects)
-{
-
-    if (m_lastDistanceThreshold != m_pParams->RTPC.distanceThreshold) {
-        m_clusterer->setDistanceThreshold(m_pParams->RTPC.distanceThreshold);
-        m_lastDistanceThreshold = m_pParams->RTPC.distanceThreshold;
-    }
-
-    std::vector<ObjectPosition> objectPositions;
-    objectPositions.reserve(inObjects.uNumObjects);
-
-    for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i) {
-        AkAudioObject* inobj = inObjects.ppObjects[i];
-
-        // Check if this is either position-only or position+orientation
-        bool shouldCluster = (inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionOnly ||
-            inobj->positioning.behavioral.spatMode == AK_SpatializationMode_PositionAndOrientation);
-
-        if (shouldCluster) {
-            objectPositions.push_back({ inobj->positioning.threeD.xform.Position(), inobj->key });
-        }
-    }
-    // Perform clustering only if there are objects
-    m_clusters.clear();
-    if (!objectPositions.empty()) {
-        m_clusterer->performClustering(objectPositions);
-
-        auto tempClusters = m_clusterer->getClusters();
-        m_clusters.reserve(tempClusters.size());
-
-        for (const auto& pair : tempClusters) {
-            m_clusters.emplace_back(pair.first, pair.second);
-        }
-    }
-}
-
-AKRESULT ObjectClusterFX::AllocateVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix,
-    AkUInt32 in_uNumChannelsIn,
-    AkUInt32 in_uNumChannelsOut)
-{
-    AkUInt32 size = AK::SpeakerVolumes::Matrix::GetRequiredSize(in_uNumChannelsIn, in_uNumChannelsOut);
-    float* matrix = static_cast<float*>(m_pAllocator->Malloc(size, __FILE__, __LINE__));
-
-    if (!matrix) {
-        return AK_InsufficientMemory;
-    }
-
-    volumeMatrix = matrix;
-    return AK_Success;
-}
-
-const std::pair<AkVector, std::vector<AkAudioObjectID>>* ObjectClusterFX::GetCluster(AkAudioObjectID objectId) const
-{
-    for (const auto& cluster : m_clusters) {
-        for (const auto& id : cluster.second) {
-            if (id == objectId) {
-                return &cluster;
-            }
-        }
-    }
-    return nullptr;
-}
-
-void ObjectClusterFX::FreeVolume(AK::SpeakerVolumes::MatrixPtr& volumeMatrix)
-{
-    if (volumeMatrix) {
-        m_pAllocator->Free(volumeMatrix);
-        volumeMatrix = nullptr;
-    }
-}
-
-void ObjectClusterFX::FreeAllVolumes()
-{
-    auto it = m_mapInObjsToOutObjs.Begin();
-    while (it != m_mapInObjsToOutObjs.End()) {
-        if ((*it).pUserData && (*it).pUserData->volumeMatrix) {
-            FreeVolume((*it).pUserData->volumeMatrix);
-        }
-        ++it;
-    }
-}
-
-void ObjectClusterFX::UpdateClusterPositions(const AkAudioObjects& inObjects)
-{
-    AkAudioObjects outputObjects = GetCurrentOutputObjects();
-    if (outputObjects.uNumObjects == 0) return;
-
-    // Track which clusters we've already processed to avoid duplicates
-    std::set<AkAudioObjectID> processedClusters;
-
-    auto it = m_mapInObjsToOutObjs.Begin();
-    while (it != m_mapInObjsToOutObjs.End()) {
-        if ((*it).pUserData && (*it).pUserData->isClustered) {
-            AkAudioObjectID clusterKey = (*it).pUserData->outputObjKey;
-
-            if (processedClusters.find(clusterKey) == processedClusters.end()) {
-                // Find the corresponding cluster
-                const std::pair<AkVector, std::vector<AkAudioObjectID>>* cluster = GetCluster((*it).key);
-                if (cluster) {
-                    AkVector meanPosition = m_utilities->CalculateMeanPosition(cluster->second, inObjects);
-
-                    // Find and update the output object for this cluster
-                    for (AkUInt32 i = 0; i < outputObjects.uNumObjects; i++) {
-                        if (outputObjects.ppObjects[i] &&
-                            outputObjects.ppObjects[i]->key == clusterKey) {
-                            outputObjects.ppObjects[i]->positioning.threeD.xform.SetPosition(meanPosition);
-                        }
-                    }
-                    processedClusters.insert(clusterKey);
-                }
-            }
-        }
-        ++it;
-    }
-}
-
-AKRESULT ObjectClusterFX::FindBestCluster(const AkVector& position, const AkAudioObjects& existingOutputs, AkAudioObjectID& outClusterKey)
-{
-    const float thresholdSquared = m_pParams->RTPC.distanceThreshold * m_pParams->RTPC.distanceThreshold;
-    float closestDistanceSquared = thresholdSquared;
-    outClusterKey = AK_INVALID_AUDIO_OBJECT_ID;
-
-    for (AkUInt32 i = 0; i < existingOutputs.uNumObjects; ++i)
+    if (!PrepareInputs(in_objects) || !m_engine.Update(m_inputs.Data(), in_objects.uNumObjects, m_clusterParams))
     {
-        const AkAudioObject* outObj = existingOutputs.ppObjects[i];
-        if (!outObj) continue;
+        PostRateLimitedMessage(MessageKind_OutOfMemory, kOutOfMemoryMessage, AK::Monitor::ErrorLevel_Error);
+        KeepOutputsSilent(uExistingOutputs);
+        return;
+    }
 
-        const AkVector outObjPos = outObj->positioning.threeD.xform.Position();
+    if (m_engine.IsOverBudget())
+        PostRateLimitedMessage(MessageKind_OverBudget, kOverBudgetMessage, AK::Monitor::ErrorLevel_Message);
 
-        // Check all possible matches for this output object
-        auto existingEntry = m_mapInObjsToOutObjs.Begin();
-        while (existingEntry != m_mapInObjsToOutObjs.End())
+    const AkUInt32 uCreated = CreateOutputs(in_objects);
+
+    if (!FetchOutputs(uExistingOutputs + uCreated))
+    {
+        PostRateLimitedMessage(MessageKind_OutOfMemory, kOutOfMemoryMessage, AK::Monitor::ErrorLevel_Error);
+        return;
+    }
+
+    if (!BuildOutputIndex())
+    {
+        PostRateLimitedMessage(MessageKind_OutOfMemory, kOutOfMemoryMessage, AK::Monitor::ErrorLevel_Error);
+        SilenceOutputs();
+        return;
+    }
+
+    m_priorityObjects.RemoveAll();
+    m_priorityValues.RemoveAll();
+
+    ProcessPassthroughs(in_objects);
+    ProcessClusters(in_objects);
+    ReleaseUnwrittenOutputs();
+    ApplyPriorities();
+    RemoveStaleEntries();
+}
+
+void ObjectClusterFX::ReleaseMemory()
+{
+    if (m_bEngineInitialized)
+        m_engine.Term();
+    m_bEngineInitialized = false;
+
+    m_inputs.Term();
+    m_inputPriorities.Term();
+    m_requests.Term();
+    m_newObjects.Term();
+    m_outputObjects.Term();
+    m_outputBuffers.Term();
+    m_clusterOutputs.Term();
+    m_clusterValidFrames.Term();
+    m_clusterHasData.Term();
+    m_outputWritten.Term();
+    m_priorityObjects.Term();
+    m_priorityValues.Term();
+
+    if (m_pHashTableService != nullptr && m_pAllocator != nullptr)
+    {
+        if (HasMemory(m_passthroughs))
+            m_pHashTableService->Term(&m_passthroughs, m_pAllocator);
+        if (HasMemory(m_clusters))
+            m_pHashTableService->Term(&m_clusters, m_pAllocator);
+        if (HasMemory(m_outputIndices))
+            m_pHashTableService->Term(&m_outputIndices, m_pAllocator);
+    }
+
+    m_passthroughs = AK::AkHashTable<AkUInt64, PassthroughEntry>();
+    m_clusters = AK::AkHashTable<AkUInt64, ClusterEntry>();
+    m_outputIndices = AK::AkHashTable<AkUInt64, AkUInt32>();
+    m_uNumOutputs = 0;
+}
+
+void ObjectClusterFX::UpdateClusterParams(AkUInt16 in_uMaxFrames)
+{
+    if (in_uMaxFrames == m_uParamsMaxFrames && !m_pParams->m_paramChangeHandler.HasAnyChanged())
+        return;
+
+    m_uParamsMaxFrames = in_uMaxFrames;
+
+    const ObjectClusterRTPCParams& rtpc = m_pParams->RTPC;
+    const AkReal32 fFrameLength = static_cast<AkReal32>(in_uMaxFrames > 0 ? in_uMaxFrames : 1);
+    const AkReal32 fSampleRate = static_cast<AkReal32>(m_uSampleRate > 0 ? m_uSampleRate : 48000);
+    const AkReal32 fFrameSeconds = fFrameLength / fSampleRate;
+
+    m_clusterParams.joinAngle = Clamp(rtpc.joinAngle, 0.f, PARAM_JOIN_ANGLE_MAX);
+    m_clusterParams.leaveRatio = Clamp(rtpc.leaveRatio, PARAM_LEAVE_RATIO_MIN, PARAM_LEAVE_RATIO_MAX);
+    m_clusterParams.dwellFrames = MillisecondsToFrames(Clamp(rtpc.dwellTime, 0.f, PARAM_DWELL_TIME_MAX), fFrameSeconds);
+    const AkUInt32 uCrossfadeFrames = MillisecondsToFrames(Clamp(rtpc.crossfadeTime, 0.f, PARAM_CROSSFADE_TIME_MAX), fFrameSeconds);
+    m_clusterParams.crossfadeFrames = uCrossfadeFrames > 0 ? uCrossfadeFrames : 1;
+    m_clusterParams.maxOutputs = static_cast<uint32_t>(Clamp(rtpc.maxOutputs, 0, PARAM_MAX_OUTPUTS_MAX));
+    m_clusterParams.nearFieldRadius = Clamp(rtpc.nearFieldRadius, 0.f, PARAM_NEAR_FIELD_RADIUS_MAX);
+    m_clusterParams.distanceWeight = Clamp(rtpc.distanceWeight, 0.f, 1.f);
+    m_clusterParams.excludePriorityAbove = static_cast<uint32_t>(Clamp(rtpc.excludePriorityAbove, 0, PARAM_PRIORITY_MAX));
+    m_clusterParams.loudnessWeighting = m_pParams->NonRTPC.loudnessWeighting;
+    m_clusterParams.loudnessSmoothing = std::exp(-fFrameSeconds / kLoudnessTimeConstant);
+    m_fSpreadFromSize = Clamp(rtpc.spreadFromSize, 0.f, 1.f);
+
+    const AkUInt32 uMessageInterval = static_cast<AkUInt32>(kMessageIntervalSeconds / fFrameSeconds);
+    m_uMessageInterval = uMessageInterval > 0 ? uMessageInterval : 1;
+
+    m_pParams->m_paramChangeHandler.ResetAllParamChanges();
+}
+
+bool ObjectClusterFX::PrepareInputs(const AkAudioObjects& in_objects)
+{
+    const AkUInt32 uNumInputs = in_objects.uNumObjects;
+    if (!m_inputs.Resize(uNumInputs) || !m_inputPriorities.Resize(uNumInputs))
+        return false;
+
+    if (uNumInputs > 0 && m_pPriorityService != nullptr)
+    {
+        m_pPriorityService->GetPriorities(in_objects.ppObjects, uNumInputs, m_inputPriorities.Data());
+    }
+    else
+    {
+        for (AkUInt32 i = 0; i < uNumInputs; ++i)
+            m_inputPriorities[i] = AK_DEFAULT_PRIORITY;
+    }
+
+    const bool bLoudnessWeighting = m_clusterParams.loudnessWeighting;
+    for (AkUInt32 i = 0; i < uNumInputs; ++i)
+    {
+        const AkAudioObject& object = *in_objects.ppObjects[i];
+        AkAudioBuffer& buffer = *in_objects.ppObjectBuffers[i];
+        const AkVector& position = object.positioning.threeD.xform.Position();
+
+        ClusterInput& input = m_inputs[i];
+        input.key = object.key;
+        input.position = ClusterVec3{ position.X, position.Y, position.Z };
+        input.loudness = (bLoudnessWeighting && buffer.NumChannels() == 1) ? ComputeRms(buffer) : 0.f;
+        input.priority = static_cast<uint32_t>(Clamp(static_cast<AkInt32>(m_inputPriorities[i]), 0, PARAM_PRIORITY_MAX));
+        input.group = HashCustomMetadata(object);
+        input.clusterable = IsClusterable(object, buffer);
+    }
+
+    return true;
+}
+
+AkUInt32 ObjectClusterFX::CreateOutputs(const AkAudioObjects& in_objects)
+{
+    m_requests.RemoveAll();
+    bool bOutOfMemory = false;
+
+    for (AkUInt32 i = 0; i < in_objects.uNumObjects; ++i)
+    {
+        if (m_inputs[i].clusterable)
+            continue;
+
+        const AkUInt32 uChannelConfig = in_objects.ppObjectBuffers[i]->GetChannelConfig().Serialize();
+        const AkInt32 iSlot = FindSlot(m_passthroughs, m_inputs[i].key);
+        if (iSlot >= 0)
         {
-            const GeneratedObject* userData = (*existingEntry).pUserData;
-            if (userData &&
-                userData->isClustered &&
-                userData->outputObjKey == outObj->key)  // Found matching cluster
-            {
-                const float distanceSquared = m_utilities->GetDistanceSquared(outObjPos, position);
-                if (distanceSquared < closestDistanceSquared) {
-                    closestDistanceSquared = distanceSquared;
-                    outClusterKey = outObj->key;
-                }
-            }
-            ++existingEntry;
+            if (m_passthroughs.ValueAt(static_cast<AkUInt32>(iSlot)).channelConfig == uChannelConfig)
+                continue;
+            m_pHashTableService->RemoveSlot(&m_passthroughs, iSlot);
         }
+
+        if (!AddRequest(uChannelConfig, i, false))
+            bOutOfMemory = true;
     }
 
-    return (outClusterKey != AK_INVALID_AUDIO_OBJECT_ID) ? AK_Success : AK_Fail;
+    AkChannelConfig monoConfig;
+    monoConfig.SetStandard(AK_SPEAKER_SETUP_MONO);
+    const AkUInt32 uMonoConfig = monoConfig.Serialize();
+
+    const AkUInt32 uNumClusters = m_engine.GetClusterCount();
+    for (AkUInt32 c = 0; c < uNumClusters; ++c)
+    {
+        const ClusterInfo& info = m_engine.GetCluster(c);
+        const AkInt32 iSlot = FindSlot(m_clusters, static_cast<AkUInt64>(info.id));
+        if (iSlot >= 0)
+        {
+            if (!info.isNew)
+                continue;
+            m_pHashTableService->RemoveSlot(&m_clusters, iSlot);
+        }
+
+        if (!AddRequest(uMonoConfig, c, true))
+            bOutOfMemory = true;
+    }
+
+    if (bOutOfMemory)
+        PostRateLimitedMessage(MessageKind_OutOfMemory, kOutOfMemoryMessage, AK::Monitor::ErrorLevel_Error);
+
+    AkUInt32 uCreated = 0;
+    const AkUInt32 uNumRequests = m_requests.Length();
+    for (AkUInt32 r = 0; r < uNumRequests; ++r)
+    {
+        if (m_requests[r].done)
+            continue;
+
+        const AkUInt32 uChannelConfig = m_requests[r].channelConfig;
+        AkUInt32 uBatchSize = 0;
+        for (AkUInt32 k = r; k < uNumRequests; ++k)
+        {
+            if (!m_requests[k].done && m_requests[k].channelConfig == uChannelConfig)
+                ++uBatchSize;
+        }
+
+        bool bCreated = false;
+        if (m_newObjects.Resize(uBatchSize))
+        {
+            AkChannelConfig channelConfig;
+            channelConfig.Deserialize(uChannelConfig);
+            AkAudioObjects newObjects(uBatchSize, nullptr, m_newObjects.Data());
+            bCreated = m_pContext->CreateOutputObjects(channelConfig, newObjects) == AK_Success;
+            if (!bCreated)
+                PostRateLimitedMessage(MessageKind_CreateFailed, kCreateFailedMessage, AK::Monitor::ErrorLevel_Error);
+        }
+        else
+        {
+            PostRateLimitedMessage(MessageKind_OutOfMemory, kOutOfMemoryMessage, AK::Monitor::ErrorLevel_Error);
+        }
+
+        AkUInt32 uObject = 0;
+        for (AkUInt32 k = r; k < uNumRequests; ++k)
+        {
+            OutputRequest& request = m_requests[k];
+            if (request.done || request.channelConfig != uChannelConfig)
+                continue;
+
+            request.done = true;
+            if (bCreated)
+                RegisterOutput(in_objects, request, m_newObjects[uObject++]);
+        }
+
+        if (bCreated)
+            uCreated += uBatchSize;
+    }
+
+    return uCreated;
 }
 
-std::unordered_map<AkAudioObjectID, ClusterState> ObjectClusterFX::ReadClusterStates(const AkAudioObjects& inObjects)
+bool ObjectClusterFX::AddRequest(AkUInt32 in_uChannelConfig, AkUInt32 in_uSource, bool in_bIsCluster)
 {
-    std::unordered_map<AkAudioObjectID, ClusterState> clusterStates;
+    OutputRequest* pRequest = m_requests.AddLast();
+    if (pRequest == nullptr)
+        return false;
 
-    for (AkUInt32 i = 0; i < inObjects.uNumObjects; ++i) {
-        AkAudioObject* inObj = inObjects.ppObjects[i];
-        AkAudioBuffer* inBuf = inObjects.ppObjectBuffers[i];
-
-        auto it = m_mapInObjsToOutObjs.Exists(inObj->key);
-        if (it && it->isClustered) {
-            AkAudioObjectID clusterID = it->outputObjKey;
-            auto& state = clusterStates[clusterID];
-
-            if (inBuf->eState != AK_NoMoreData) {
-                state.activeInputCount++;
-            }
-            if (inBuf->uValidFrames > 0) {
-                state.maxFrames = std::max(state.maxFrames, inBuf->uValidFrames);
-            }
-        }
-    }
-
-    return clusterStates;
+    pRequest->channelConfig = in_uChannelConfig;
+    pRequest->source = in_uSource;
+    pRequest->isCluster = in_bIsCluster;
+    pRequest->done = false;
+    return true;
 }
 
-AkAudioObjects ObjectClusterFX::GetCurrentOutputObjects()
+void ObjectClusterFX::RegisterOutput(const AkAudioObjects& in_objects, const OutputRequest& in_request, AkAudioObject* in_pObject)
 {
-    AkAudioObjects outputObjects{};
-    outputObjects.uNumObjects = 0;
-    outputObjects.ppObjectBuffers = nullptr;
-    outputObjects.ppObjects = nullptr;
+    if (in_request.isCluster)
+    {
+        const ClusterInfo& info = m_engine.GetCluster(in_request.source);
+        ClusterEntry* pEntry = static_cast<ClusterEntry*>(m_pHashTableService->AddKey(&m_clusters, m_pAllocator, static_cast<AkUInt64>(info.id)));
+        if (pEntry == nullptr)
+        {
+            PostRateLimitedMessage(MessageKind_OutOfMemory, kOutOfMemoryMessage, AK::Monitor::ErrorLevel_Error);
+            return;
+        }
 
-    if (!m_pContext) {
-        return outputObjects;
+        pEntry->outputKey = in_pObject->key;
+        pEntry->lastFrame = m_uFrame - 1;
+
+        char szName[32];
+        FormatClusterName(info.id, szName);
+        in_pObject->SetName(m_pAllocator, szName);
+        return;
     }
 
-    // First call to get count
-    m_pContext->GetOutputObjects(outputObjects);
-
-    if (outputObjects.uNumObjects > 0) {
-        try {
-            m_tempBuffers.resize(outputObjects.uNumObjects);
-            m_tempObjects.resize(outputObjects.uNumObjects);
-
-            outputObjects.ppObjectBuffers = m_tempBuffers.data();
-            outputObjects.ppObjects = m_tempObjects.data();
-
-            // Second call to get actual data
-            m_pContext->GetOutputObjects(outputObjects);
-        }
-        catch (const std::bad_alloc&) {
-            // Reset on allocation failure
-            outputObjects.uNumObjects = 0;
-            outputObjects.ppObjectBuffers = nullptr;
-            outputObjects.ppObjects = nullptr;
-        }
+    const AkAudioObject& input = *in_objects.ppObjects[in_request.source];
+    PassthroughEntry* pEntry = static_cast<PassthroughEntry*>(m_pHashTableService->AddKey(&m_passthroughs, m_pAllocator, input.key));
+    if (pEntry == nullptr)
+    {
+        PostRateLimitedMessage(MessageKind_OutOfMemory, kOutOfMemoryMessage, AK::Monitor::ErrorLevel_Error);
+        return;
     }
 
-    return outputObjects;
+    pEntry->outputKey = in_pObject->key;
+    pEntry->channelConfig = in_request.channelConfig;
+    pEntry->lastFrame = m_uFrame - 1;
+
+    const char* szInputName = input.objectName.Get();
+    in_pObject->SetName(m_pAllocator, (szInputName != nullptr && szInputName[0] != '\0') ? szInputName : kPassthroughName);
+}
+
+bool ObjectClusterFX::FetchOutputs(AkUInt32 in_uExpected)
+{
+    m_uNumOutputs = 0;
+
+    AkUInt32 uCapacity = in_uExpected + 1;
+    if (!m_outputObjects.Resize(uCapacity) || !m_outputBuffers.Resize(uCapacity))
+        return false;
+
+    AkAudioObjects outputs(uCapacity, m_outputBuffers.Data(), m_outputObjects.Data());
+    m_pContext->GetOutputObjects(outputs);
+    AkUInt32 uNumOutputs = outputs.uNumObjects;
+    if (uNumOutputs >= uCapacity)
+    {
+        AkAudioObjects count;
+        m_pContext->GetOutputObjects(count);
+        uCapacity = count.uNumObjects;
+        if (!m_outputObjects.Resize(uCapacity) || !m_outputBuffers.Resize(uCapacity))
+            return false;
+
+        AkAudioObjects allOutputs(uCapacity, m_outputBuffers.Data(), m_outputObjects.Data());
+        m_pContext->GetOutputObjects(allOutputs);
+        uNumOutputs = allOutputs.uNumObjects;
+    }
+
+    if (!m_outputWritten.Resize(uNumOutputs))
+        return false;
+
+    for (AkUInt32 i = 0; i < uNumOutputs; ++i)
+        m_outputWritten[i] = 0;
+
+    m_uNumOutputs = uNumOutputs;
+    return true;
+}
+
+bool ObjectClusterFX::BuildOutputIndex()
+{
+    m_pHashTableService->Reset(&m_outputIndices);
+
+    for (AkUInt32 i = 0; i < m_uNumOutputs; ++i)
+    {
+        AkUInt32* pIndex = static_cast<AkUInt32*>(m_pHashTableService->AddKey(&m_outputIndices, m_pAllocator, m_outputObjects[i]->key));
+        if (pIndex == nullptr)
+            return false;
+        *pIndex = i;
+    }
+
+    return true;
+}
+
+AkUInt32 ObjectClusterFX::FindOutput(AkAudioObjectID in_key) const
+{
+    const AkInt32 iSlot = FindSlot(m_outputIndices, in_key);
+    return iSlot >= 0 ? m_outputIndices.ValueAt(static_cast<AkUInt32>(iSlot)) : kInvalidIndex;
+}
+
+void ObjectClusterFX::ProcessPassthroughs(const AkAudioObjects& in_objects)
+{
+    for (AkUInt32 i = 0; i < in_objects.uNumObjects; ++i)
+    {
+        if (m_inputs[i].clusterable)
+            continue;
+
+        const AkInt32 iSlot = FindSlot(m_passthroughs, m_inputs[i].key);
+        if (iSlot < 0)
+            continue;
+
+        PassthroughEntry& entry = m_passthroughs.ValueAt(static_cast<AkUInt32>(iSlot));
+        const AkUInt32 uOutput = FindOutput(entry.outputKey);
+        if (uOutput == kInvalidIndex)
+            continue;
+
+        entry.lastFrame = m_uFrame;
+        m_outputWritten[uOutput] = 1;
+
+        AkAudioObject* pInObject = in_objects.ppObjects[i];
+        AkAudioBuffer* pInBuffer = in_objects.ppObjectBuffers[i];
+        AkAudioObject* pOutObject = m_outputObjects[uOutput];
+        AkAudioBuffer* pOutBuffer = m_outputBuffers[uOutput];
+
+        const AkUInt32 uNumChannels = AkMin(pInBuffer->NumChannels(), pOutBuffer->NumChannels());
+        const AkUInt16 uFrames = AkMin(pInBuffer->uValidFrames, pOutBuffer->MaxFrames());
+        for (AkUInt32 channel = 0; channel < uNumChannels; ++channel)
+            AKPLATFORM::AkMemCpy(pOutBuffer->GetChannel(channel), pInBuffer->GetChannel(channel), static_cast<AkUInt32>(uFrames * sizeof(AkSampleType)));
+
+        pOutBuffer->uValidFrames = uFrames;
+        pOutBuffer->eState = pInBuffer->eState;
+        pOutObject->positioning = pInObject->positioning;
+        if (pOutObject->arCustomMetadata.Copy(pInObject->arCustomMetadata) != AK_Success)
+            PostRateLimitedMessage(MessageKind_OutOfMemory, kOutOfMemoryMessage, AK::Monitor::ErrorLevel_Error);
+
+        QueuePriority(pOutObject, m_inputPriorities[i]);
+    }
+}
+
+void ObjectClusterFX::ProcessClusters(const AkAudioObjects& in_objects)
+{
+    const AkUInt32 uNumClusters = m_engine.GetClusterCount();
+    if (!m_clusterOutputs.Resize(uNumClusters) || !m_clusterValidFrames.Resize(uNumClusters) || !m_clusterHasData.Resize(uNumClusters))
+    {
+        PostRateLimitedMessage(MessageKind_OutOfMemory, kOutOfMemoryMessage, AK::Monitor::ErrorLevel_Error);
+        return;
+    }
+
+    for (AkUInt32 c = 0; c < uNumClusters; ++c)
+    {
+        const ClusterInfo& info = m_engine.GetCluster(c);
+        m_clusterOutputs[c] = kInvalidIndex;
+        m_clusterValidFrames[c] = 0;
+        m_clusterHasData[c] = 0;
+
+        const AkInt32 iSlot = FindSlot(m_clusters, static_cast<AkUInt64>(info.id));
+        if (iSlot < 0 || info.representative >= in_objects.uNumObjects)
+            continue;
+
+        ClusterEntry& entry = m_clusters.ValueAt(static_cast<AkUInt32>(iSlot));
+        const AkUInt32 uOutput = FindOutput(entry.outputKey);
+        if (uOutput == kInvalidIndex || m_outputBuffers[uOutput]->NumChannels() == 0)
+            continue;
+
+        entry.lastFrame = m_uFrame;
+        m_clusterOutputs[c] = uOutput;
+
+        AkAudioBuffer* pOutBuffer = m_outputBuffers[uOutput];
+        const AkUInt32 uNumChannels = pOutBuffer->NumChannels();
+        for (AkUInt32 channel = 0; channel < uNumChannels; ++channel)
+            AKPLATFORM::AkMemSet(pOutBuffer->GetChannel(channel), 0, static_cast<AkUInt32>(pOutBuffer->MaxFrames() * sizeof(AkSampleType)));
+
+        AkAudioObject* pOutObject = m_outputObjects[uOutput];
+        const AkAudioObject* pRepresentative = in_objects.ppObjects[info.representative];
+        pOutObject->positioning = pRepresentative->positioning;
+        if (info.memberCount > 1)
+        {
+            Ak3dData& threeD = pOutObject->positioning.threeD;
+            pOutObject->positioning.behavioral.spatMode = AK_SpatializationMode_PositionOnly;
+            threeD.xform.SetPosition(info.position.x, info.position.y, info.position.z);
+            threeD.xform.SetOrientation(
+                AK_DEFAULT_LISTENER_FRONT_X, AK_DEFAULT_LISTENER_FRONT_Y, AK_DEFAULT_LISTENER_FRONT_Z,
+                AK_DEFAULT_TOP_X, AK_DEFAULT_TOP_Y, AK_DEFAULT_TOP_Z);
+            const AkReal32 fSizeSpread = m_fSpreadFromSize * Clamp(info.angularRadius / kFullSpreadRadius, 0.f, 1.f);
+            threeD.spread = AkMax(pRepresentative->positioning.threeD.spread, fSizeSpread);
+        }
+
+        if (pOutObject->arCustomMetadata.Copy(pRepresentative->arCustomMetadata) != AK_Success)
+            PostRateLimitedMessage(MessageKind_OutOfMemory, kOutOfMemoryMessage, AK::Monitor::ErrorLevel_Error);
+
+        QueuePriority(pOutObject, static_cast<AkPriority>(Clamp<AkUInt32>(info.priority, 0, static_cast<AkUInt32>(PARAM_PRIORITY_MAX))));
+    }
+
+    const AkUInt32 uNumContributions = m_engine.GetContributionCount();
+    for (AkUInt32 k = 0; k < uNumContributions; ++k)
+    {
+        const ClusterContribution& contribution = m_engine.GetContribution(k);
+        if (contribution.cluster >= uNumClusters || contribution.input >= in_objects.uNumObjects)
+            continue;
+
+        const AkUInt32 uOutput = m_clusterOutputs[contribution.cluster];
+        AkAudioBuffer* pInBuffer = in_objects.ppObjectBuffers[contribution.input];
+        if (uOutput == kInvalidIndex || pInBuffer->NumChannels() == 0)
+            continue;
+
+        AkAudioBuffer* pOutBuffer = m_outputBuffers[uOutput];
+        const AkUInt16 uFrames = AkMin(pInBuffer->uValidFrames, pOutBuffer->MaxFrames());
+        MixRamp(pInBuffer->GetChannel(0), pOutBuffer->GetChannel(0), uFrames, contribution.gainStart, contribution.gainEnd);
+        if (uFrames > m_clusterValidFrames[contribution.cluster])
+            m_clusterValidFrames[contribution.cluster] = uFrames;
+        if (pInBuffer->eState != AK_NoMoreData)
+            m_clusterHasData[contribution.cluster] = 1;
+    }
+
+    for (AkUInt32 c = 0; c < uNumClusters; ++c)
+    {
+        const AkUInt32 uOutput = m_clusterOutputs[c];
+        if (uOutput == kInvalidIndex)
+            continue;
+
+        AkAudioBuffer* pOutBuffer = m_outputBuffers[uOutput];
+        pOutBuffer->uValidFrames = m_clusterValidFrames[c];
+        pOutBuffer->eState = m_clusterHasData[c] != 0 ? AK_DataReady : AK_NoMoreData;
+        m_outputWritten[uOutput] = 1;
+    }
+}
+
+void ObjectClusterFX::ReleaseUnwrittenOutputs()
+{
+    for (AkUInt32 i = 0; i < m_uNumOutputs; ++i)
+    {
+        if (m_outputWritten[i] != 0)
+            continue;
+
+        AkAudioBuffer* pBuffer = m_outputBuffers[i];
+        const AkUInt32 uNumChannels = pBuffer->NumChannels();
+        for (AkUInt32 channel = 0; channel < uNumChannels; ++channel)
+            AKPLATFORM::AkMemSet(pBuffer->GetChannel(channel), 0, static_cast<AkUInt32>(pBuffer->MaxFrames() * sizeof(AkSampleType)));
+
+        pBuffer->uValidFrames = 0;
+        pBuffer->eState = AK_NoMoreData;
+    }
+}
+
+void ObjectClusterFX::QueuePriority(AkAudioObject* in_pObject, AkPriority in_priority)
+{
+    if (m_pPriorityService == nullptr)
+        return;
+
+    if (m_priorityObjects.AddLast(in_pObject) == nullptr)
+        return;
+
+    if (m_priorityValues.AddLast(in_priority) == nullptr)
+        m_priorityObjects.RemoveLast();
+}
+
+void ObjectClusterFX::ApplyPriorities()
+{
+    const AkUInt32 uCount = m_priorityObjects.Length();
+    if (m_pPriorityService == nullptr || uCount == 0)
+        return;
+
+    m_pPriorityService->SetPriorities(m_priorityObjects.Data(), uCount, m_priorityValues.Data());
+}
+
+void ObjectClusterFX::RemoveStaleEntries()
+{
+    const AkUInt32 uFrame = m_uFrame;
+
+    m_pHashTableService->RemoveIf(
+        static_cast<AK::AkHashTableBase<AkUInt64>*>(&m_passthroughs),
+        [this, uFrame](AkUInt32 in_uSlot) { return m_passthroughs.ValueAt(in_uSlot).lastFrame != uFrame; });
+
+    m_pHashTableService->RemoveIf(
+        static_cast<AK::AkHashTableBase<AkUInt64>*>(&m_clusters),
+        [this, uFrame](AkUInt32 in_uSlot) { return m_clusters.ValueAt(in_uSlot).lastFrame != uFrame; });
+}
+
+void ObjectClusterFX::KeepOutputsSilent(AkUInt32 in_uExpected)
+{
+    if (FetchOutputs(in_uExpected))
+        SilenceOutputs();
+}
+
+void ObjectClusterFX::SilenceOutputs()
+{
+    for (AkUInt32 i = 0; i < m_uNumOutputs; ++i)
+    {
+        AkAudioBuffer* pBuffer = m_outputBuffers[i];
+        const AkUInt32 uNumChannels = pBuffer->NumChannels();
+        for (AkUInt32 channel = 0; channel < uNumChannels; ++channel)
+            AKPLATFORM::AkMemSet(pBuffer->GetChannel(channel), 0, static_cast<AkUInt32>(pBuffer->MaxFrames() * sizeof(AkSampleType)));
+
+        pBuffer->uValidFrames = pBuffer->MaxFrames();
+        pBuffer->eState = AK_DataReady;
+    }
+}
+
+void ObjectClusterFX::PostRateLimitedMessage(MessageKind in_kind, const char* in_szMessage, AK::Monitor::ErrorLevel in_level)
+{
+    if (m_aMessagePosted[in_kind] && m_uFrame - m_aMessageFrames[in_kind] < m_uMessageInterval)
+        return;
+
+    m_aMessagePosted[in_kind] = true;
+    m_aMessageFrames[in_kind] = m_uFrame;
+    m_pContext->PostMonitorMessage(in_szMessage, in_level);
 }

@@ -30,7 +30,7 @@ ObjectClusterPluginGUI::ObjectClusterPluginGUI()
 {
 }
 
-ADD_AUDIOPLUGIN_CLASS_TO_CONTAINER(
+AK_ADD_PLUGIN_CLASS_TO_CONTAINER(
     ObjectCluster,            // Name of the plug-in container for this shared library
     ObjectClusterPluginGUI,   // Authoring plug-in class to add to the plug-in container
     ObjectClusterFX           // Corresponding Sound Engine plug-in class

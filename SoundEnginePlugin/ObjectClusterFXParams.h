@@ -32,24 +32,80 @@ the specific language governing permissions and limitations under the License.
 
 // Add parameters IDs here, those IDs should map to the AudioEnginePropertyID
 // attributes in the xml property definition.
-static const AkPluginParamID DISTANCE_THRESHOLD = 0;
-static const AkUInt32 NUM_PARAMS = 1;
+/// ID of the join angle parameter.
+static const AkPluginParamID PARAM_JOIN_ANGLE_ID = 0;
+/// ID of the leave ratio parameter.
+static const AkPluginParamID PARAM_LEAVE_RATIO_ID = 1;
+/// ID of the dwell time parameter.
+static const AkPluginParamID PARAM_DWELL_TIME_ID = 2;
+/// ID of the crossfade time parameter.
+static const AkPluginParamID PARAM_CROSSFADE_TIME_ID = 3;
+/// ID of the maximum number of outputs parameter.
+static const AkPluginParamID PARAM_MAX_OUTPUTS_ID = 4;
+/// ID of the near-field radius parameter.
+static const AkPluginParamID PARAM_NEAR_FIELD_RADIUS_ID = 5;
+/// ID of the distance weight parameter.
+static const AkPluginParamID PARAM_DISTANCE_WEIGHT_ID = 6;
+/// ID of the parameter that sets the priority above which inputs are never merged.
+static const AkPluginParamID PARAM_EXCLUDE_PRIORITY_ABOVE_ID = 7;
+/// ID of the spread from cluster size parameter.
+static const AkPluginParamID PARAM_SPREAD_FROM_SIZE_ID = 8;
+/// ID of the loudness weighting parameter.
+static const AkPluginParamID PARAM_LOUDNESS_WEIGHTING_ID = 9;
+/// Number of parameters.
+static const AkUInt32 NUM_PARAMS = 10;
 
+/// Largest join angle in degrees.
+static const AkReal32 PARAM_JOIN_ANGLE_MAX = 180.f;
+/// Smallest leave ratio.
+static const AkReal32 PARAM_LEAVE_RATIO_MIN = 1.f;
+/// Largest leave ratio.
+static const AkReal32 PARAM_LEAVE_RATIO_MAX = 4.f;
+/// Largest dwell time in milliseconds.
+static const AkReal32 PARAM_DWELL_TIME_MAX = 5000.f;
+/// Largest crossfade time in milliseconds.
+static const AkReal32 PARAM_CROSSFADE_TIME_MAX = 1000.f;
+/// Largest maximum number of outputs.
+static const AkInt32 PARAM_MAX_OUTPUTS_MAX = 512;
+/// Largest near-field radius in game units.
+static const AkReal32 PARAM_NEAR_FIELD_RADIUS_MAX = 1000000.f;
+/// Largest playback priority, which is also the largest Exclude Priority Above value.
+static const AkInt32 PARAM_PRIORITY_MAX = 100;
+
+/// Size in bytes of the parameter block that the authoring plug-in writes to banks.
+static const AkUInt32 PARAMS_BLOCK_SIZE = 7 * sizeof(AkReal32) + 2 * sizeof(AkInt32) + sizeof(AkUInt8);
+
+/** @brief Parameters that RTPCs can drive. */
 struct ObjectClusterRTPCParams
 {
-    AkReal32 distanceThreshold;
+    AkReal32 joinAngle;           ///< Angle in degrees under which an input may join a cluster.
+    AkReal32 leaveRatio;          ///< Leave angle as a multiple of the join angle.
+    AkReal32 dwellTime;           ///< Time in milliseconds a change must last before an input leaves its cluster or two clusters merge.
+    AkReal32 crossfadeTime;       ///< Time in milliseconds over which a moving input fades between clusters.
+    AkInt32 maxOutputs;           ///< Maximum number of outputs, passthrough inputs included; 0 means no limit.
+    AkReal32 nearFieldRadius;     ///< Inputs closer to the listener than this distance in game units are never merged.
+    AkReal32 distanceWeight;      ///< How much a difference in distance counts against the join angle.
+    AkInt32 excludePriorityAbove; ///< Inputs with a higher priority are never merged.
+    AkReal32 spreadFromSize;      ///< Share of the cluster's angular size used as its minimum spread.
 };
 
+/** @brief Parameters that RTPCs cannot drive. */
 struct ObjectClusterNonRTPCParams
 {
+    bool loudnessWeighting; ///< Weights cluster positions by input loudness.
 };
 
+/** @brief Parameter node of the ObjectCluster effect. */
 struct ObjectClusterFXParams
     : public AK::IAkPluginParam
 {
+    /** @brief Creates a parameter node with default values. */
     ObjectClusterFXParams();
+
+    /** @brief Creates a copy of another parameter node. */
     ObjectClusterFXParams(const ObjectClusterFXParams& in_rParams);
 
+    /** @brief Destroys the parameter node. */
     ~ObjectClusterFXParams();
 
     /// Create a duplicate of the parameter node instance in its current state.
@@ -68,10 +124,10 @@ struct ObjectClusterFXParams
     /// Update a single parameter at a time and perform the necessary actions on the parameter changes.
     AKRESULT SetParam(AkPluginParamID in_paramID, const void* in_pValue, AkUInt32 in_ulParamSize) override;
 
-    AK::AkFXParameterChangeHandler<NUM_PARAMS> m_paramChangeHandler;
+    AK::AkFXParameterChangeHandler<NUM_PARAMS> m_paramChangeHandler; ///< Tracks which parameters changed since the effect last read them.
 
-    ObjectClusterRTPCParams RTPC;
-    ObjectClusterNonRTPCParams NonRTPC;
+    ObjectClusterRTPCParams RTPC;       ///< Parameters that RTPCs can drive.
+    ObjectClusterNonRTPCParams NonRTPC; ///< Parameters that RTPCs cannot drive.
 };
 
 #endif // ObjectClusterFXParams_H

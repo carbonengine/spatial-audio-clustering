@@ -33,33 +33,29 @@ trademarks of CCP ehf.
 #ifndef ObjectClusterFX_H
 #define ObjectClusterFX_H
 
+#include "ClusterEngine.h"
 #include "ObjectClusterFXParams.h"
+
 #include <AK/SoundEngine/Common/AkAudioObject.h>
-#include <AK/Plugin/PluginServices/AkMixerInputMap.h>
-#include <set>
-#include <string>
-#include <unordered_map>
-#include "SpatialClustering.h"
-#include "Utilities.h"
+#include <AK/SoundEngine/Common/IAkPluginHashTable.h>
+#include <AK/Tools/Common/AkArray.h>
+#include <AK/Tools/Common/AkMonitorError.h>
 
-/**
- * @struct GeneratedObject
- * @brief Represents a generated audio object with its properties and state
- */
-struct GeneratedObject {
-	AK::SpeakerVolumes::MatrixPtr volumeMatrix = nullptr;
-	AkAudioObjectID outputObjKey;
-	int index;
-	bool isClustered = false;
-};
+/** @brief Cluster engine allocator that allocates through the Wwise plug-in allocator. */
+class ObjectClusterAllocator final : public ClusterAllocator
+{
+public:
+    /** @brief Sets the Wwise plug-in allocator to allocate through. */
+    void Init(AK::IAkPluginMemAlloc* in_pAllocator);
 
-/**
- * @struct ClusterState
- * @brief Maintains the state of an audio object cluster
- */
-struct ClusterState {
-	AkUInt32 activeInputCount = 0;
-	AkUInt16 maxFrames = 0;
+    /** @brief Allocates a block of memory, or returns nullptr. */
+    void* Alloc(size_t in_size) override;
+
+    /** @brief Frees a block returned by Alloc. */
+    void Free(void* in_pBlock) override;
+
+private:
+    AK::IAkPluginMemAlloc* m_pAllocator = nullptr; ///< Wwise plug-in allocator.
 };
 
 /**
@@ -67,10 +63,14 @@ struct ClusterState {
  * @brief Audio object clustering effect plugin
  * @details Implements audio object clustering and processing functionality as an out-of-place plugin
  */
-class ObjectClusterFX : public AK::IAkOutOfPlaceObjectPlugin
+class ObjectClusterFX
+    : public AK::IAkOutOfPlaceObjectPlugin
 {
 public:
+    /** @brief Creates the effect. */
     ObjectClusterFX();
+
+    /** @brief Destroys the effect. */
     ~ObjectClusterFX();
 
     /**
@@ -78,10 +78,10 @@ public:
      * @param in_pAllocator Memory allocator interface
      * @param in_pContext Plugin context interface
      * @param in_pParams Plugin parameters
-     * @param in_rFormat Audio format
+     * @param io_rFormat Audio format
      * @return AKRESULT Status code indicating success or failure
      */
-    AKRESULT Init(AK::IAkPluginMemAlloc* in_pAllocator, AK::IAkEffectPluginContext* in_pContext, AK::IAkPluginParam* in_pParams, AkAudioFormat& in_rFormat) override;
+    AKRESULT Init(AK::IAkPluginMemAlloc* in_pAllocator, AK::IAkEffectPluginContext* in_pContext, AK::IAkPluginParam* in_pParams, AkAudioFormat& io_rFormat) override;
 
     /**
      * @brief Terminates the plugin and releases resources
@@ -105,145 +105,142 @@ public:
 
     /**
      * @brief Executes the audio processing
-     * @param inObjects Input audio objects and buffers
-     * @param outObjects Output audio objects and buffers
+     * @param in_objects Input audio objects and buffers
+     * @param out_objects Output audio objects and buffers
      */
-    void Execute(const AkAudioObjects& inObjects, const AkAudioObjects& outObjects) override;
+    void Execute(const AkAudioObjects& in_objects, const AkAudioObjects& out_objects) override;
 
 private:
-    ObjectClusterFXParams* m_pParams;
-    AK::IAkPluginMemAlloc* m_pAllocator;
-    AK::IAkEffectPluginContext* m_pContext;
+    /** @brief Array type that allocates through the Wwise plug-in allocator. */
+    template <typename T>
+    using PluginArray = AkArray<T, const T&, AkPluginArrayAllocator>;
 
-    /**
-     * @brief Updates the clusterer with input object positions
-     * @param inObjects Input audio objects
-     */
-    void FeedPositionsToClusterer(const AkAudioObjects& inObjects);
+    /** @brief Output object that carries one passthrough input. */
+    struct PassthroughEntry
+    {
+        AkAudioObjectID outputKey; ///< Key of the output object.
+        AkUInt32 channelConfig;    ///< Serialized channel configuration of the output object.
+        AkUInt32 lastFrame;        ///< Frame in which the output object was last written.
+    };
 
-    /**
-     * @brief Prepares audio objects for processing
-     * @param inObjects Input audio objects
-     */
-    void PrepareAudioObjects(const AkAudioObjects& inObjects);
+    /** @brief Output object that carries one cluster. */
+    struct ClusterEntry
+    {
+        AkAudioObjectID outputKey; ///< Key of the output object.
+        AkUInt32 lastFrame;        ///< Frame in which the output object was last written.
+    };
 
-    /**
-     * @brief Processes all audio objects
-     * @param inObjects Input audio objects
-     */
-    void ProcessAudioObjects(const AkAudioObjects& inObjects);
+    /** @brief Output object to create in the current frame. */
+    struct OutputRequest
+    {
+        AkUInt32 channelConfig; ///< Serialized channel configuration of the new output object.
+        AkUInt32 source;        ///< Input index for a passthrough output, or cluster index for a cluster output.
+        bool isCluster;         ///< True if the output object carries a cluster.
+        bool done;              ///< True once the request has been handled.
+    };
 
-    /**
-     * @brief Processes a clustered audio object
-     * @param inObj Input audio object
-     * @param inBuf Input audio buffer
-     * @param outObj Output audio object
-     * @param outBuf Output audio buffer
-     * @param userData Generated object data
-     * @param clusterState Current cluster state
-     */
-    void ProcessClusteredObject(
-        const AkAudioObject* inObj,
-        AkAudioBuffer* inBuf,
-        AkAudioObject* outObj,
-        AkAudioBuffer* outBuf,
-        GeneratedObject* userData,
-        const ClusterState& clusterState);
+    /** @brief Kinds of monitor messages, each rate-limited on its own. */
+    enum MessageKind : AkUInt32
+    {
+        MessageKind_CreateFailed, ///< Output objects could not be created.
+        MessageKind_OutOfMemory,  ///< Memory ran out.
+        MessageKind_OverBudget,   ///< More outputs were needed than the maximum allows.
+        MessageKind_Count         ///< Number of message kinds.
+    };
 
-    /**
-     * @brief Processes an unclustered audio object
-     * @param inObj Input audio object
-     * @param inBuf Input audio buffer
-     * @param outObj Output audio object
-     * @param outBuf Output audio buffer
-     */
-    void ProcessUnclustered(
-        const AkAudioObject* inObj,
-        AkAudioBuffer* inBuf,
-        AkAudioObject* outObj,
-        AkAudioBuffer* outBuf);
+    /** @brief Frees all memory and leaves the effect ready for another Init. */
+    void ReleaseMemory();
 
-    /**
-     * @brief Mixes audio into a cluster
-     * @param inObject Input audio object
-     * @param inBuffer Input audio buffer
-     * @param outBuffer Output audio buffer
-     * @param cumulativeGain Cumulative gain ramp
-     * @param pGeneratedObject Generated object data
-     */
-    void MixToCluster(
-        const AkAudioObject* inObject,
-        AkAudioBuffer* inBuffer,
-        AkAudioBuffer* outBuffer,
-        const AkRamp& cumulativeGain,
-        GeneratedObject* pGeneratedObject);
+    /** @brief Recomputes the cluster engine settings when parameters or the buffer length change. */
+    void UpdateClusterParams(AkUInt16 in_uMaxFrames);
 
-    /**
-     * @brief Gets current output objects
-     * @return Current output audio objects
-     */
-    AkAudioObjects GetCurrentOutputObjects();
+    /** @brief Fills the cluster engine inputs for this frame and returns false if memory ran out. */
+    bool PrepareInputs(const AkAudioObjects& in_objects);
 
-    /**
-     * @brief Reads cluster states from input objects
-     * @param inObjects Input audio objects
-     * @return Map of cluster states
-     */
-    std::unordered_map<AkAudioObjectID, ClusterState> ReadClusterStates(const AkAudioObjects& inObjects);
+    /** @brief Creates output objects for new passthrough inputs and new clusters and returns how many were created. */
+    AkUInt32 CreateOutputs(const AkAudioObjects& in_objects);
 
-    /**
-     * @brief Finds the best cluster for a position
-     * @param position Position to find cluster for
-     * @param existingOutputs Existing output objects
-     * @param outClusterKey Output cluster identifier
-     * @return AKRESULT Status code indicating success or failure
-     */
-    AKRESULT FindBestCluster(
-        const AkVector& position,
-        const AkAudioObjects& existingOutputs,
-        AkAudioObjectID& outClusterKey);
+    /** @brief Adds an output object to create in this frame and returns false if memory ran out. */
+    bool AddRequest(AkUInt32 in_uChannelConfig, AkUInt32 in_uSource, bool in_bIsCluster);
 
-    /**
-     * @brief Gets the cluster containing an object
-     * @param objectId Object identifier
-     * @return Pointer to cluster pair or nullptr if not found
-     */
-    const std::pair<AkVector, std::vector<AkAudioObjectID>>* GetCluster(AkAudioObjectID objectId) const;
+    /** @brief Records and names one new output object. */
+    void RegisterOutput(const AkAudioObjects& in_objects, const OutputRequest& in_request, AkAudioObject* in_pObject);
 
-    /**
-     * @brief Allocates volume matrix memory
-     * @param volumeMatrix Volume matrix pointer
-     * @param in_uNumChannelsIn Number of input channels
-     * @param in_uNumChannelsOut Number of output channels
-     * @return AKRESULT Status code indicating success or failure
-     */
-    AKRESULT AllocateVolumes(AK::SpeakerVolumes::MatrixPtr& volumeMatrix, AkUInt32 in_uNumChannelsIn, AkUInt32 in_uNumChannelsOut);
+    /** @brief Fetches all output objects into the output arrays and returns false if memory ran out. */
+    bool FetchOutputs(AkUInt32 in_uExpected);
 
-    /**
-     * @brief Frees volume matrix memory
-     * @param volumeMatrix Volume matrix to free
-     */
-    void FreeVolume(AK::SpeakerVolumes::MatrixPtr& volumeMatrix);
+    /** @brief Builds the lookup from output key to output index and returns false if memory ran out. */
+    bool BuildOutputIndex();
 
-    /**
-     * @brief Frees all volume matrices
-     */
-    void FreeAllVolumes();
+    /** @brief Returns the index of an output object in the output arrays, or kInvalidIndex. */
+    AkUInt32 FindOutput(AkAudioObjectID in_key) const;
 
-	std::unique_ptr<SpatialClusterer> m_clusterer;
-	std::unique_ptr<Utilities> m_utilities;
-	std::vector<AkAudioBuffer*> m_tempBuffers;
-	std::vector<AkAudioObject*> m_tempObjects;
+    /** @brief Copies each passthrough input to its output object. */
+    void ProcessPassthroughs(const AkAudioObjects& in_objects);
 
-	float m_lastDistanceThreshold = -1.0f;
+    /** @brief Mixes the clusters into their output objects and sets their metadata. */
+    void ProcessClusters(const AkAudioObjects& in_objects);
 
-	/// Maps that hold clustering data
-	std::vector<std::pair<AkVector, std::vector<AkAudioObjectID>>> m_clusters;
+    /** @brief Writes an empty last frame to every fetched output object that was not written in this frame, so that the sound engine destroys it. */
+    void ReleaseUnwrittenOutputs();
 
-	/// Maps input objects to their corresponding output objects and processing information
-	AkMixerInputMap<AkUInt64, GeneratedObject> m_mapInObjsToOutObjs;
+    /** @brief Queues a priority to set on an output object. */
+    void QueuePriority(AkAudioObject* in_pObject, AkPriority in_priority);
 
-	void UpdateClusterPositions(const AkAudioObjects& inObjects);
+    /** @brief Sets the queued priorities on the output objects. */
+    void ApplyPriorities();
+
+    /** @brief Forgets output objects that were not written in this frame. */
+    void RemoveStaleEntries();
+
+    /** @brief Fetches all output objects and keeps them alive with silence for this frame. */
+    void KeepOutputsSilent(AkUInt32 in_uExpected);
+
+    /** @brief Writes silence to the fetched output objects and keeps them alive for this frame. */
+    void SilenceOutputs();
+
+    /** @brief Posts a monitor message unless one of the same kind was posted recently. */
+    void PostRateLimitedMessage(MessageKind in_kind, const char* in_szMessage, AK::Monitor::ErrorLevel in_level);
+
+    /** @brief Index value that marks a missing output object. */
+    static constexpr AkUInt32 kInvalidIndex = 0xFFFFFFFF;
+
+    ObjectClusterFXParams* m_pParams;                            ///< Parameter node.
+    AK::IAkPluginMemAlloc* m_pAllocator;                         ///< Wwise plug-in allocator.
+    AK::IAkEffectPluginContext* m_pContext;                      ///< Effect context.
+    AK::IAkPluginServiceAudioObjectPriority* m_pPriorityService; ///< Service that reads and writes object priorities.
+    AK::IAkPluginServiceHashTable* m_pHashTableService;          ///< Service that manages the hash tables.
+
+    ObjectClusterAllocator m_engineAllocator; ///< Allocator the cluster engine allocates through.
+    ClusterEngine m_engine;                   ///< Cluster engine.
+    bool m_bEngineInitialized;                ///< True once Init was called on the cluster engine.
+    ClusterParams m_clusterParams;            ///< Cluster engine settings for the current parameters.
+    AkReal32 m_fSpreadFromSize;               ///< Share of the cluster's angular size used as its minimum spread.
+    AkUInt32 m_uSampleRate;                   ///< Sample rate in Hz.
+    AkUInt16 m_uParamsMaxFrames;              ///< Buffer length the cluster engine settings were computed for.
+    AkUInt32 m_uMessageInterval;              ///< Minimum number of frames between two messages of the same kind.
+    AkUInt32 m_uFrame;                        ///< Number of the current frame.
+    AkUInt32 m_uNumOutputs;                   ///< Number of output objects fetched in this frame.
+
+    AkUInt32 m_aMessageFrames[MessageKind_Count]; ///< Frame in which each kind of message was last posted.
+    bool m_aMessagePosted[MessageKind_Count];     ///< True for each kind of message that was posted at least once.
+
+    PluginArray<ClusterInput> m_inputs;              ///< Cluster engine inputs for this frame.
+    PluginArray<AkPriority> m_inputPriorities;       ///< Priority of each input for this frame.
+    PluginArray<OutputRequest> m_requests;           ///< Output objects to create in this frame.
+    PluginArray<AkAudioObject*> m_newObjects;        ///< Objects returned by one call to CreateOutputObjects.
+    PluginArray<AkAudioObject*> m_outputObjects;     ///< Output objects for this frame.
+    PluginArray<AkAudioBuffer*> m_outputBuffers;     ///< Output buffers for this frame.
+    PluginArray<AkUInt32> m_clusterOutputs;          ///< Output index of each reported cluster for this frame.
+    PluginArray<AkUInt16> m_clusterValidFrames;      ///< Valid frames of each reported cluster for this frame.
+    PluginArray<AkUInt8> m_clusterHasData;           ///< Nonzero for each reported cluster with an input that has not ended in this frame.
+    PluginArray<AkUInt8> m_outputWritten;            ///< Nonzero for each fetched output object written in this frame.
+    PluginArray<AkAudioObject*> m_priorityObjects;   ///< Output objects whose priority is set in this frame.
+    PluginArray<AkPriority> m_priorityValues;        ///< Priorities to set on the output objects.
+
+    AK::AkHashTable<AkUInt64, PassthroughEntry> m_passthroughs; ///< Passthrough outputs by input key.
+    AK::AkHashTable<AkUInt64, ClusterEntry> m_clusters;         ///< Cluster outputs by cluster ID.
+    AK::AkHashTable<AkUInt64, AkUInt32> m_outputIndices;        ///< Output index by output key for this frame.
 };
 
 #endif // ObjectClusterFX_H

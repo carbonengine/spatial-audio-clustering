@@ -27,7 +27,6 @@ the specific language governing permissions and limitations under the License.
 #include "ObjectClusterPlugin.h"
 #include "../SoundEnginePlugin/ObjectClusterFXFactory.h"
 
-
 ObjectClusterPlugin::ObjectClusterPlugin()
 {
 }
@@ -36,21 +35,28 @@ ObjectClusterPlugin::~ObjectClusterPlugin()
 {
 }
 
-bool ObjectClusterPlugin::GetBankParameters(const GUID & in_guidPlatform, AK::Wwise::Plugin::DataWriter& in_dataWriter) const
+bool ObjectClusterPlugin::GetBankParameters(const GUID& in_guidPlatform, AK::Wwise::Plugin::DataWriter& in_dataWriter) const
 {
     // Write bank data here
-    in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:distanceThreshold"));
-
-    return true;
+    return in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:joinAngle"))
+        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:leaveRatio"))
+        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:dwellTime"))
+        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:crossfadeTime"))
+        && in_dataWriter.WriteInt32(m_propertySet.GetInt32(in_guidPlatform, "CCP:maxOutputs"))
+        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:nearFieldRadius"))
+        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:distanceWeight"))
+        && in_dataWriter.WriteInt32(m_propertySet.GetInt32(in_guidPlatform, "CCP:excludePriorityAbove"))
+        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:spreadFromSize"))
+        && in_dataWriter.WriteBool(m_propertySet.GetBool(in_guidPlatform, "CCP:loudnessWeighting"));
 }
 
-DEFINE_AUDIOPLUGIN_CONTAINER(ObjectCluster);											// Create a PluginContainer structure that contains the info for our plugin
-EXPORT_AUDIOPLUGIN_CONTAINER(ObjectCluster);											// This is a DLL, we want to have a standardized name
-ADD_AUDIOPLUGIN_CLASS_TO_CONTAINER(                                             // Add our CLI class to the PluginContainer
+AK_DEFINE_PLUGIN_CONTAINER(ObjectCluster);											// Create a PluginContainer structure that contains the info for our plugin
+AK_EXPORT_PLUGIN_CONTAINER(ObjectCluster);											// This is a DLL, we want to have a standardized name
+AK_ADD_PLUGIN_CLASS_TO_CONTAINER(                                             // Add our CLI class to the PluginContainer
     ObjectCluster,        // Name of the plug-in container for this shared library
     ObjectClusterPlugin,  // Authoring plug-in class to add to the plug-in container
     ObjectClusterFX       // Corresponding Sound Engine plug-in class
 );
 DEFINE_PLUGIN_REGISTER_HOOK
 
-DEFINEDUMMYASSERTHOOK;							// Placeholder assert hook for Wwise plug-ins using AKASSERT (cassert used by default)
+DEFINE_PLUGIN_ASSERT_HOOK;							// Placeholder assert hook for Wwise plug-ins using AKASSERT (cassert used by default)

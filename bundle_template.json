@@ -11,7 +11,7 @@
     "tag": "ObjectCluster",
 
     // Description displayed in the Wwise Launcher for this bundle
-    "description": "groups audio objects based on their positions",
+    "description": "merges audio objects by direction from the listener",
 
     // Vendor name displayed in the Wwise Launcher for this bundle
     "vendor": "CCPGames",
