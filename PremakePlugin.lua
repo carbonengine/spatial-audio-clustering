@@ -31,6 +31,8 @@ end
 local Plugin = {}
 Plugin.name = "ObjectCluster"
 Plugin.factoryheader = "../SoundEnginePlugin/ObjectClusterFXFactory.h"
+Plugin.appleteamid = ""
+Plugin.signtoolargs = {}
 Plugin.sdk = {}
 Plugin.sdk.static = {}
 Plugin.sdk.shared = {}
@@ -39,7 +41,6 @@ Plugin.authoring = {}
 -- SDK STATIC PLUGIN SECTION
 Plugin.sdk.static.includedirs = -- https://github.com/premake/premake-core/wiki/includedirs
 {
-   os.getenv("WWISESDK") .. "/include"
 }
 Plugin.sdk.static.files = -- https://github.com/premake/premake-core/wiki/files
 {
@@ -66,7 +67,6 @@ Plugin.sdk.static.defines = -- https://github.com/premake/premake-core/wiki/defi
 -- SDK SHARED PLUGIN SECTION
 Plugin.sdk.shared.includedirs =
 {
-   os.getenv("WWISESDK") .. "/include"
 }
 Plugin.sdk.shared.files =
 {
@@ -89,7 +89,6 @@ Plugin.sdk.shared.defines =
 -- AUTHORING PLUGIN SECTION
 Plugin.authoring.includedirs =
 {
-   os.getenv("WWISESDK") .. "/include"
 }
 Plugin.authoring.files =
 {
