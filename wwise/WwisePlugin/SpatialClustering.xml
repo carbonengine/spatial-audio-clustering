@@ -29,7 +29,7 @@ See https://www.audiokinetic.com/library/edge/?source=SDK&id=plugin__xml.html
 for the documentation about the plugin xml format
 -->
 <PluginModule>
-  <EffectPlugin Name="ObjectCluster" CompanyID="64" PluginID="6973">
+  <EffectPlugin Name="Spatial Clustering" CompanyID="64" PluginID="6973">
     <PluginInfo>
       <PlatformSupport>
         <Platform Name="Any">

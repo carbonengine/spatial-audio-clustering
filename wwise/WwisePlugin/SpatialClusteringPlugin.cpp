@@ -24,18 +24,18 @@ the specific language governing permissions and limitations under the License.
   Copyright (c) 2023 Audiokinetic Inc.
 *******************************************************************************/
 
-#include "ObjectClusterPlugin.h"
-#include "../SoundEnginePlugin/ObjectClusterFXFactory.h"
+#include "SpatialClusteringPlugin.h"
+#include "../SoundEnginePlugin/SpatialClusteringFXFactory.h"
 
-ObjectClusterPlugin::ObjectClusterPlugin()
+SpatialClusteringPlugin::SpatialClusteringPlugin()
 {
 }
 
-ObjectClusterPlugin::~ObjectClusterPlugin()
+SpatialClusteringPlugin::~SpatialClusteringPlugin()
 {
 }
 
-bool ObjectClusterPlugin::GetBankParameters(const GUID& in_guidPlatform, AK::Wwise::Plugin::DataWriter& in_dataWriter) const
+bool SpatialClusteringPlugin::GetBankParameters(const GUID& in_guidPlatform, AK::Wwise::Plugin::DataWriter& in_dataWriter) const
 {
     // Write bank data here
     return in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:joinAngle"))
@@ -50,12 +50,12 @@ bool ObjectClusterPlugin::GetBankParameters(const GUID& in_guidPlatform, AK::Wwi
         && in_dataWriter.WriteBool(m_propertySet.GetBool(in_guidPlatform, "CCP:loudnessWeighting"));
 }
 
-AK_DEFINE_PLUGIN_CONTAINER(ObjectCluster);											// Create a PluginContainer structure that contains the info for our plugin
-AK_EXPORT_PLUGIN_CONTAINER(ObjectCluster);											// This is a DLL, we want to have a standardized name
+AK_DEFINE_PLUGIN_CONTAINER(SpatialClustering);											// Create a PluginContainer structure that contains the info for our plugin
+AK_EXPORT_PLUGIN_CONTAINER(SpatialClustering);											// This is a DLL, we want to have a standardized name
 AK_ADD_PLUGIN_CLASS_TO_CONTAINER(                                             // Add our CLI class to the PluginContainer
-    ObjectCluster,        // Name of the plug-in container for this shared library
-    ObjectClusterPlugin,  // Authoring plug-in class to add to the plug-in container
-    ObjectClusterFX       // Corresponding Sound Engine plug-in class
+    SpatialClustering,        // Name of the plug-in container for this shared library
+    SpatialClusteringPlugin,  // Authoring plug-in class to add to the plug-in container
+    SpatialClusteringFX       // Corresponding Sound Engine plug-in class
 );
 DEFINE_PLUGIN_REGISTER_HOOK
 

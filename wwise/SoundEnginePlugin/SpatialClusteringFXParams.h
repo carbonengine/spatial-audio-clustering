@@ -24,8 +24,8 @@ the specific language governing permissions and limitations under the License.
   Copyright (c) 2023 Audiokinetic Inc.
 *******************************************************************************/
 
-#ifndef ObjectClusterFXParams_H
-#define ObjectClusterFXParams_H
+#ifndef SpatialClusteringFXParams_H
+#define SpatialClusteringFXParams_H
 
 #include <AK/SoundEngine/Common/IAkPlugin.h>
 #include <AK/Plugin/PluginServices/AkFXParameterChangeHandler.h>
@@ -76,7 +76,7 @@ static const AkInt32 PARAM_PRIORITY_MAX = 100;
 static const AkUInt32 PARAMS_BLOCK_SIZE = 7 * sizeof(AkReal32) + 2 * sizeof(AkInt32) + sizeof(AkUInt8);
 
 /** @brief Parameters that RTPCs can drive. */
-struct ObjectClusterRTPCParams
+struct SpatialClusteringRTPCParams
 {
     AkReal32 joinAngle;           ///< Angle in degrees under which an input may join a cluster.
     AkReal32 leaveRatio;          ///< Leave angle as a multiple of the join angle.
@@ -90,23 +90,23 @@ struct ObjectClusterRTPCParams
 };
 
 /** @brief Parameters that RTPCs cannot drive. */
-struct ObjectClusterNonRTPCParams
+struct SpatialClusteringNonRTPCParams
 {
     bool loudnessWeighting; ///< Weights cluster positions by input loudness.
 };
 
-/** @brief Parameter node of the ObjectCluster effect. */
-struct ObjectClusterFXParams
+/** @brief Parameter node of the Spatial Clustering effect. */
+struct SpatialClusteringFXParams
     : public AK::IAkPluginParam
 {
     /** @brief Creates a parameter node with default values. */
-    ObjectClusterFXParams();
+    SpatialClusteringFXParams();
 
     /** @brief Creates a copy of another parameter node. */
-    ObjectClusterFXParams(const ObjectClusterFXParams& in_rParams);
+    SpatialClusteringFXParams(const SpatialClusteringFXParams& in_rParams);
 
     /** @brief Destroys the parameter node. */
-    ~ObjectClusterFXParams();
+    ~SpatialClusteringFXParams();
 
     /// Create a duplicate of the parameter node instance in its current state.
     IAkPluginParam* Clone(AK::IAkPluginMemAlloc* in_pAllocator) override;
@@ -126,8 +126,8 @@ struct ObjectClusterFXParams
 
     AK::AkFXParameterChangeHandler<NUM_PARAMS> m_paramChangeHandler; ///< Tracks which parameters changed since the effect last read them.
 
-    ObjectClusterRTPCParams RTPC;       ///< Parameters that RTPCs can drive.
-    ObjectClusterNonRTPCParams NonRTPC; ///< Parameters that RTPCs cannot drive.
+    SpatialClusteringRTPCParams RTPC;       ///< Parameters that RTPCs can drive.
+    SpatialClusteringNonRTPCParams NonRTPC; ///< Parameters that RTPCs cannot drive.
 };
 
-#endif // ObjectClusterFXParams_H
+#endif // SpatialClusteringFXParams_H

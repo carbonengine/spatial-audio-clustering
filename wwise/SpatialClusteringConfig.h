@@ -24,17 +24,17 @@ the specific language governing permissions and limitations under the License.
   Copyright (c) 2023 Audiokinetic Inc.
 *******************************************************************************/
 
-#ifndef ObjectClusterConfig_H
-#define ObjectClusterConfig_H
+#ifndef SpatialClusteringConfig_H
+#define SpatialClusteringConfig_H
 
 // NB: In order to properly change the CompanyID / PluginID, you must change them:
 // - In this file;
 // - In the xml file located in the WwisePlugin directory;
 // - In the xml file located in the FactoryAssets directory.
-namespace ObjectClusterConfig
+namespace SpatialClusteringConfig
 {
     static const unsigned short CompanyID = 64;
     static const unsigned short PluginID = 6973;
 }
 
-#endif // ObjectClusterConfig_H
+#endif // SpatialClusteringConfig_H

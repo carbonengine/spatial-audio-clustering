@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by ObjectCluster.rc
+// Used by SpatialClustering.rc
 
 // Next default values for new objects
 // 

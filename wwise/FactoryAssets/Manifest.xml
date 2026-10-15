@@ -28,8 +28,8 @@ the specific language governing permissions and limitations under the License.
 See https://www.audiokinetic.com/library/edge/?source=Help&id=import_factory_assets
 for more information on factory assets
 -->
-<Manifest Name="ObjectCluster" Type="Presets">
+<Manifest Name="SpatialClustering" Type="Presets">
   <Dependencies>
-    <Plugin PluginName="ObjectCluster" CompanyID="64" PluginID="6973" PluginType="3"/>
+    <Plugin PluginName="SpatialClustering" CompanyID="64" PluginID="6973" PluginType="3"/>
   </Dependencies>
 </Manifest>

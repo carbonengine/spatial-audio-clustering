@@ -29,8 +29,8 @@ if not _AK_PREMAKE then
 end
 
 local Plugin = {}
-Plugin.name = "ObjectCluster"
-Plugin.factoryheader = "../SoundEnginePlugin/ObjectClusterFXFactory.h"
+Plugin.name = "SpatialClustering"
+Plugin.factoryheader = "../SoundEnginePlugin/SpatialClusteringFXFactory.h"
 Plugin.appleteamid = ""
 Plugin.signtoolargs = {}
 Plugin.sdk = {}
@@ -54,7 +54,7 @@ Plugin.sdk.static.files = -- https://github.com/premake/premake-core/wiki/files
 }
 Plugin.sdk.static.excludes = -- https://github.com/premake/premake-core/wiki/removefiles
 {
-    "ObjectClusterFXShared.cpp"
+    "SpatialClusteringFXShared.cpp"
 }
 Plugin.sdk.static.links = -- https://github.com/premake/premake-core/wiki/links
 {
@@ -73,8 +73,8 @@ Plugin.sdk.shared.includedirs =
 }
 Plugin.sdk.shared.files =
 {
-    "ObjectClusterFXShared.cpp",
-    "ObjectClusterFXFactory.h",
+    "SpatialClusteringFXShared.cpp",
+    "SpatialClusteringFXFactory.h",
 }
 Plugin.sdk.shared.excludes =
 {
@@ -99,8 +99,8 @@ Plugin.authoring.files =
     "**.h",
     "**.hpp",
     "**.c",
-    "ObjectCluster.def",
-    "ObjectCluster.xml",
+    "SpatialClustering.def",
+    "SpatialClustering.xml",
     "**.rc",
 }
 Plugin.authoring.excludes =

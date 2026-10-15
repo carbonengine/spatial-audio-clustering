@@ -24,7 +24,7 @@ the specific language governing permissions and limitations under the License.
   Copyright (c) 2023 Audiokinetic Inc.
 *******************************************************************************/
 
-#include "ObjectClusterFXParams.h"
+#include "SpatialClusteringFXParams.h"
 
 #include <AK/Tools/Common/AkBankReadHelpers.h>
 #include <AK/Tools/Common/AkPlatformFuncs.h>
@@ -34,13 +34,13 @@ the specific language governing permissions and limitations under the License.
 namespace
 {
     /** @brief Default values of the parameters that RTPCs can drive. */
-    const ObjectClusterRTPCParams kDefaultRTPCParams = { 5.f, 1.5f, 200.f, 50.f, 0, 0.f, 0.f, 100, 1.f };
+    const SpatialClusteringRTPCParams kDefaultRTPCParams = { 5.f, 1.5f, 200.f, 50.f, 0, 0.f, 0.f, 100, 1.f };
 
     /** @brief Default value of the loudness weighting parameter. */
     const bool kDefaultLoudnessWeighting = true;
 
     /** @brief Returns true if every real parameter is a finite number. */
-    bool AreFinite(const ObjectClusterRTPCParams& in_params)
+    bool AreFinite(const SpatialClusteringRTPCParams& in_params)
     {
         return std::isfinite(in_params.joinAngle)
             && std::isfinite(in_params.leaveRatio)
@@ -74,29 +74,29 @@ namespace
     }
 }
 
-ObjectClusterFXParams::ObjectClusterFXParams()
+SpatialClusteringFXParams::SpatialClusteringFXParams()
     : RTPC(kDefaultRTPCParams)
 {
     NonRTPC.loudnessWeighting = kDefaultLoudnessWeighting;
 }
 
-ObjectClusterFXParams::~ObjectClusterFXParams()
+SpatialClusteringFXParams::~SpatialClusteringFXParams()
 {
 }
 
-ObjectClusterFXParams::ObjectClusterFXParams(const ObjectClusterFXParams& in_rParams)
+SpatialClusteringFXParams::SpatialClusteringFXParams(const SpatialClusteringFXParams& in_rParams)
 {
     RTPC = in_rParams.RTPC;
     NonRTPC = in_rParams.NonRTPC;
     m_paramChangeHandler.SetAllParamChanges();
 }
 
-AK::IAkPluginParam* ObjectClusterFXParams::Clone(AK::IAkPluginMemAlloc* in_pAllocator)
+AK::IAkPluginParam* SpatialClusteringFXParams::Clone(AK::IAkPluginMemAlloc* in_pAllocator)
 {
-    return AK_PLUGIN_NEW(in_pAllocator, ObjectClusterFXParams(*this));
+    return AK_PLUGIN_NEW(in_pAllocator, SpatialClusteringFXParams(*this));
 }
 
-AKRESULT ObjectClusterFXParams::Init(AK::IAkPluginMemAlloc* in_pAllocator, const void* in_pParamsBlock, AkUInt32 in_ulBlockSize)
+AKRESULT SpatialClusteringFXParams::Init(AK::IAkPluginMemAlloc* in_pAllocator, const void* in_pParamsBlock, AkUInt32 in_ulBlockSize)
 {
     (void)in_pAllocator;
 
@@ -112,13 +112,13 @@ AKRESULT ObjectClusterFXParams::Init(AK::IAkPluginMemAlloc* in_pAllocator, const
     return SetParamsBlock(in_pParamsBlock, in_ulBlockSize);
 }
 
-AKRESULT ObjectClusterFXParams::Term(AK::IAkPluginMemAlloc* in_pAllocator)
+AKRESULT SpatialClusteringFXParams::Term(AK::IAkPluginMemAlloc* in_pAllocator)
 {
     AK_PLUGIN_DELETE(in_pAllocator, this);
     return AK_Success;
 }
 
-AKRESULT ObjectClusterFXParams::SetParamsBlock(const void* in_pParamsBlock, AkUInt32 in_ulBlockSize)
+AKRESULT SpatialClusteringFXParams::SetParamsBlock(const void* in_pParamsBlock, AkUInt32 in_ulBlockSize)
 {
     if (in_pParamsBlock == nullptr || in_ulBlockSize != PARAMS_BLOCK_SIZE)
         return AK_InvalidParameter;
@@ -126,7 +126,7 @@ AKRESULT ObjectClusterFXParams::SetParamsBlock(const void* in_pParamsBlock, AkUI
     AKRESULT eResult = AK_Success;
     AkUInt8* pParamsBlock = (AkUInt8*)in_pParamsBlock;
 
-    ObjectClusterRTPCParams rtpc;
+    SpatialClusteringRTPCParams rtpc;
     rtpc.joinAngle = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
     rtpc.leaveRatio = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
     rtpc.dwellTime = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
@@ -149,7 +149,7 @@ AKRESULT ObjectClusterFXParams::SetParamsBlock(const void* in_pParamsBlock, AkUI
     return eResult;
 }
 
-AKRESULT ObjectClusterFXParams::SetParam(AkPluginParamID in_paramID, const void* in_pValue, AkUInt32 in_ulParamSize)
+AKRESULT SpatialClusteringFXParams::SetParam(AkPluginParamID in_paramID, const void* in_pValue, AkUInt32 in_ulParamSize)
 {
     AkReal32 value = 0.f;
 

@@ -5,7 +5,7 @@
 
 ## Overview
 
-The Spatial Clustering plugin (ObjectCluster) merges audio objects that reach the listener from similar directions into fewer output objects. This reduces system audio object consumption in computationally demanding scenarios.
+The Spatial Clustering plugin merges audio objects that reach the listener from similar directions into fewer output objects. This reduces system audio object consumption in computationally demanding scenarios.
 
 Unlike traditional Effect Plug-Ins which are agnostic to Audio Objects, Object Processors have direct control over Audio Objects (AkAudioObject) passing through a bus, enabling the processing of their metadata and spatial characteristics.
 
@@ -147,7 +147,7 @@ The same controls cover the whole range: a Join Angle of 180 with Max Outputs at
 - In Views->Profiler->Audio Object List, select the bus. The Post-Effects stage shows the plug-in's outputs (`Cluster <id>` and the passthrough outputs); the Pre-Effects stage shows its inputs.
 - Selections in the Audio Object List drive the Audio Object 3D Viewer, the Audio Object Meter and the Audio Object Metadata views. Use the 3D Viewer for a visual spatial representation of the clusters.
 - Start a capture and check the Capture Log. The plug-in posts a message when it is not on an Audio Objects bus, when it needs more outputs than Max Outputs allows, when it cannot create output objects and when it runs out of memory. Repeated messages of the same kind are posted at most once every 5 seconds.
-- The runtime plug-in must be built for the same Wwise SDK version as the game, since the sound engine rejects plug-ins built for another version. A game that loads plug-in DLLs looks for ObjectCluster.dll next to the executable, or in the folder set in AkInitSettings::szPluginDLLPath. A game that links plug-ins statically links ObjectClusterFX.lib and includes ObjectClusterFXFactory.h in one source file.
+- The runtime plug-in must be built for the same Wwise SDK version as the game, since the sound engine rejects plug-ins built for another version. A game that loads plug-in DLLs looks for SpatialClustering.dll next to the executable, or in the folder set in AkInitSettings::szPluginDLLPath. A game that links plug-ins statically links SpatialClusteringFX.lib and includes SpatialClusteringFXFactory.h in one source file.
 
 ![Wwise_TWJ1fyWlc5](https://github.com/user-attachments/assets/d46c84bb-196e-4c2a-b932-62920066b516)
 
@@ -159,9 +159,9 @@ To place breakpoints and debug the plugin follow the steps [here](https://www.au
 | Path | Contents |
 |---|---|
 | `core/src/ClusterEngine.h/.cpp` | The clustering. Plain C++17 with no Wwise headers; all memory goes through a `ClusterAllocator`. |
-| `wwise/SoundEnginePlugin/ObjectClusterFX.h/.cpp` | The Wwise object processor: reads the input objects, runs the engine, creates and updates output objects and mixes the inputs into them with gain ramps. |
-| `wwise/SoundEnginePlugin/ObjectClusterFXParams.h/.cpp` | Parameters, read from banks and RTPCs. |
-| `wwise/WwisePlugin/` | The authoring plug-in and the property definitions (`ObjectCluster.xml`). |
+| `wwise/SoundEnginePlugin/SpatialClusteringFX.h/.cpp` | The Wwise object processor: reads the input objects, runs the engine, creates and updates output objects and mixes the inputs into them with gain ramps. |
+| `wwise/SoundEnginePlugin/SpatialClusteringFXParams.h/.cpp` | Parameters, read from banks and RTPCs. |
+| `wwise/WwisePlugin/` | The authoring plug-in and the property definitions (`SpatialClustering.xml`). |
 | `core/tests/` | Standalone tests, scenarios and benchmark for the engine. Not part of the plug-in build. |
 
 ## Getting Started
@@ -189,8 +189,8 @@ python "%WWISEROOT%\Scripts\Build\Plugins\wp.py" build Authoring -c Release -x x
 ```
 
 The build copies its outputs into the Wwise install:
-- Runtime plug-in: `%WWISEROOT%\SDK\x64_vc180\<Config>\lib\ObjectClusterFX.lib` (static) and `%WWISEROOT%\SDK\x64_vc180\<Config>\bin\ObjectCluster.dll` (dynamic).
-- Authoring plug-in: `%WWISEROOT%\Authoring\x64\Release\bin\Plugins\ObjectCluster.dll` and `ObjectCluster.xml`.
+- Runtime plug-in: `%WWISEROOT%\SDK\x64_vc180\<Config>\lib\SpatialClusteringFX.lib` (static) and `%WWISEROOT%\SDK\x64_vc180\<Config>\bin\SpatialClustering.dll` (dynamic).
+- Authoring plug-in: `%WWISEROOT%\Authoring\x64\Release\bin\Plugins\SpatialClustering.dll` and `SpatialClustering.xml`.
 
 To also copy the runtime DLL somewhere else after each build, set `CUSTOM_WWISE_PLUGIN_DLL_PATH` for both premake and build. The DLL is then copied to `<path>\<platform>\<arch>\<toolset>\<config>\`.
 

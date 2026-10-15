@@ -30,11 +30,11 @@ CCP's trademarks or game content. EVE Online and EVE Frontier are registered
 trademarks of CCP ehf.
 *******************************************************************************/
 
-#ifndef ObjectClusterFX_H
-#define ObjectClusterFX_H
+#ifndef SpatialClusteringFX_H
+#define SpatialClusteringFX_H
 
 #include "ClusterEngine.h"
-#include "ObjectClusterFXParams.h"
+#include "SpatialClusteringFXParams.h"
 
 #include <AK/SoundEngine/Common/AkAudioObject.h>
 #include <AK/SoundEngine/Common/IAkPluginHashTable.h>
@@ -42,7 +42,7 @@ trademarks of CCP ehf.
 #include <AK/Tools/Common/AkMonitorError.h>
 
 /** @brief Cluster engine allocator that allocates through the Wwise plug-in allocator. */
-class ObjectClusterAllocator final : public ClusterAllocator
+class SpatialClusteringAllocator final : public ClusterAllocator
 {
 public:
     /** @brief Sets the Wwise plug-in allocator to allocate through. */
@@ -59,19 +59,19 @@ private:
 };
 
 /**
- * @class ObjectClusterFX
+ * @class SpatialClusteringFX
  * @brief Audio object clustering effect plugin
  * @details Implements audio object clustering and processing functionality as an out-of-place plugin
  */
-class ObjectClusterFX
+class SpatialClusteringFX
     : public AK::IAkOutOfPlaceObjectPlugin
 {
 public:
     /** @brief Creates the effect. */
-    ObjectClusterFX();
+    SpatialClusteringFX();
 
     /** @brief Destroys the effect. */
-    ~ObjectClusterFX();
+    ~SpatialClusteringFX();
 
     /**
      * @brief Initializes the plugin
@@ -205,13 +205,13 @@ private:
     /** @brief Index value that marks a missing output object. */
     static constexpr AkUInt32 kInvalidIndex = 0xFFFFFFFF;
 
-    ObjectClusterFXParams* m_pParams;                            ///< Parameter node.
+    SpatialClusteringFXParams* m_pParams;                            ///< Parameter node.
     AK::IAkPluginMemAlloc* m_pAllocator;                         ///< Wwise plug-in allocator.
     AK::IAkEffectPluginContext* m_pContext;                      ///< Effect context.
     AK::IAkPluginServiceAudioObjectPriority* m_pPriorityService; ///< Service that reads and writes object priorities.
     AK::IAkPluginServiceHashTable* m_pHashTableService;          ///< Service that manages the hash tables.
 
-    ObjectClusterAllocator m_engineAllocator; ///< Allocator the cluster engine allocates through.
+    SpatialClusteringAllocator m_engineAllocator; ///< Allocator the cluster engine allocates through.
     ClusterEngine m_engine;                   ///< Cluster engine.
     bool m_bEngineInitialized;                ///< True once Init was called on the cluster engine.
     ClusterParams m_clusterParams;            ///< Cluster engine settings for the current parameters.
@@ -243,4 +243,4 @@ private:
     AK::AkHashTable<AkUInt64, AkUInt32> m_outputIndices;        ///< Output index by output key for this frame.
 };
 
-#endif // ObjectClusterFX_H
+#endif // SpatialClusteringFX_H

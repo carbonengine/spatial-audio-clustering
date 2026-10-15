@@ -2,19 +2,19 @@
 // for the documentation about the bundle_template.json format
 {
     // Unique identifier of this bundle. Id must be unique across all existing plugins and versions.
-    "id": "CCPGames.ObjectCluster.${year}_${major}_${minor}_${build}",
+    "id": "CCPGames.SpatialClustering.${year}_${major}_${minor}_${build}",
 
     // Name displayed in the Wwise Launcher for this bundle
-    "name": "ObjectCluster",
+    "name": "Spatial Clustering",
     
     // Tag uniquely identifying the plug-in (format [0-9A-z_]+, 50 characters maximum)
-    "tag": "ObjectCluster",
+    "tag": "SpatialClustering",
 
     // Description displayed in the Wwise Launcher for this bundle
     "description": "merges audio objects by direction from the listener",
 
     // Vendor name displayed in the Wwise Launcher for this bundle
-    "vendor": "CCPGames",
+    "vendor": "CCP Games",
 
     // Base64 representation of an image to be displayed in the Wwise Launcher for this bundle (PNG, JPEG or GIF)
     "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",

@@ -30,8 +30,8 @@ CCP's trademarks or game content. EVE Online and EVE Frontier are registered
 trademarks of CCP ehf.
 *******************************************************************************/
 
-#include "ObjectClusterFX.h"
-#include "../ObjectClusterConfig.h"
+#include "SpatialClusteringFX.h"
+#include "../SpatialClusteringConfig.h"
 
 #include <AK/AkWwiseSDKVersion.h>
 #include <AK/SoundEngine/Common/AkHashTableFuncs.h>
@@ -40,17 +40,17 @@ trademarks of CCP ehf.
 
 #include <cmath>
 
-AK::IAkPlugin* CreateObjectClusterFX(AK::IAkPluginMemAlloc* in_pAllocator)
+AK::IAkPlugin* CreateSpatialClusteringFX(AK::IAkPluginMemAlloc* in_pAllocator)
 {
-    return AK_PLUGIN_NEW(in_pAllocator, ObjectClusterFX());
+    return AK_PLUGIN_NEW(in_pAllocator, SpatialClusteringFX());
 }
 
-AK::IAkPluginParam* CreateObjectClusterFXParams(AK::IAkPluginMemAlloc* in_pAllocator)
+AK::IAkPluginParam* CreateSpatialClusteringFXParams(AK::IAkPluginMemAlloc* in_pAllocator)
 {
-    return AK_PLUGIN_NEW(in_pAllocator, ObjectClusterFXParams());
+    return AK_PLUGIN_NEW(in_pAllocator, SpatialClusteringFXParams());
 }
 
-AK_IMPLEMENT_PLUGIN_FACTORY(ObjectClusterFX, AkPluginTypeEffect, ObjectClusterConfig::CompanyID, ObjectClusterConfig::PluginID)
+AK_IMPLEMENT_PLUGIN_FACTORY(SpatialClusteringFX, AkPluginTypeEffect, SpatialClusteringConfig::CompanyID, SpatialClusteringConfig::PluginID)
 
 namespace
 {
@@ -73,22 +73,22 @@ namespace
     const char kClusterNamePrefix[] = "Cluster ";
 
     /** @brief Message posted when the plug-in is not on a bus. */
-    const char kNotOnBusMessage[] = "ObjectCluster only runs on busses. Insert it on an Audio Objects bus.";
+    const char kNotOnBusMessage[] = "Spatial Clustering only runs on busses. Insert it on an Audio Objects bus.";
 
     /** @brief Message posted when the bus is not an Audio Objects bus. */
-    const char kNotObjectBusMessage[] = "ObjectCluster is not on an Audio Objects bus, so there is nothing to cluster and the bus signal passes through. Set the bus channel configuration to Audio Objects.";
+    const char kNotObjectBusMessage[] = "Spatial Clustering is not on an Audio Objects bus, so there is nothing to cluster and the bus signal passes through. Set the bus channel configuration to Audio Objects.";
 
     /** @brief Message posted when a plug-in service is missing. */
-    const char kMissingServiceMessage[] = "ObjectCluster could not get the hash table service from the sound engine.";
+    const char kMissingServiceMessage[] = "Spatial Clustering could not get the hash table service from the sound engine.";
 
     /** @brief Message posted when output objects cannot be created. */
-    const char kCreateFailedMessage[] = "ObjectCluster could not create output objects, so some inputs are silent.";
+    const char kCreateFailedMessage[] = "Spatial Clustering could not create output objects, so some inputs are silent.";
 
     /** @brief Message posted when memory runs out. */
-    const char kOutOfMemoryMessage[] = "ObjectCluster ran out of memory, so some audio may drop out.";
+    const char kOutOfMemoryMessage[] = "Spatial Clustering ran out of memory, so some audio may drop out.";
 
     /** @brief Message posted when the inputs that are left cannot be merged down to Max Outputs. */
-    const char kOverBudgetMessage[] = "ObjectCluster needs more outputs than Max Outputs allows because the remaining inputs cannot be merged (passthrough inputs, excluded inputs or different custom metadata).";
+    const char kOverBudgetMessage[] = "Spatial Clustering needs more outputs than Max Outputs allows because the remaining inputs cannot be merged (passthrough inputs, excluded inputs or different custom metadata).";
 
     /** @brief Returns a value limited to a range. */
     template <typename T>
@@ -191,12 +191,12 @@ namespace
     }
 }
 
-void ObjectClusterAllocator::Init(AK::IAkPluginMemAlloc* in_pAllocator)
+void SpatialClusteringAllocator::Init(AK::IAkPluginMemAlloc* in_pAllocator)
 {
     m_pAllocator = in_pAllocator;
 }
 
-void* ObjectClusterAllocator::Alloc(size_t in_size)
+void* SpatialClusteringAllocator::Alloc(size_t in_size)
 {
     if (m_pAllocator == nullptr)
         return nullptr;
@@ -204,13 +204,13 @@ void* ObjectClusterAllocator::Alloc(size_t in_size)
     return AK_PLUGIN_ALLOC(m_pAllocator, in_size);
 }
 
-void ObjectClusterAllocator::Free(void* in_pBlock)
+void SpatialClusteringAllocator::Free(void* in_pBlock)
 {
     if (m_pAllocator != nullptr && in_pBlock != nullptr)
         AK_PLUGIN_FREE(m_pAllocator, in_pBlock);
 }
 
-ObjectClusterFX::ObjectClusterFX()
+SpatialClusteringFX::SpatialClusteringFX()
     : m_pParams(nullptr)
     , m_pAllocator(nullptr)
     , m_pContext(nullptr)
@@ -228,13 +228,13 @@ ObjectClusterFX::ObjectClusterFX()
 {
 }
 
-ObjectClusterFX::~ObjectClusterFX()
+SpatialClusteringFX::~SpatialClusteringFX()
 {
 }
 
-AKRESULT ObjectClusterFX::Init(AK::IAkPluginMemAlloc* in_pAllocator, AK::IAkEffectPluginContext* in_pContext, AK::IAkPluginParam* in_pParams, AkAudioFormat& io_rFormat)
+AKRESULT SpatialClusteringFX::Init(AK::IAkPluginMemAlloc* in_pAllocator, AK::IAkEffectPluginContext* in_pContext, AK::IAkPluginParam* in_pParams, AkAudioFormat& io_rFormat)
 {
-    m_pParams = static_cast<ObjectClusterFXParams*>(in_pParams);
+    m_pParams = static_cast<SpatialClusteringFXParams*>(in_pParams);
     m_pAllocator = in_pAllocator;
     m_pContext = in_pContext;
 
@@ -305,14 +305,14 @@ AKRESULT ObjectClusterFX::Init(AK::IAkPluginMemAlloc* in_pAllocator, AK::IAkEffe
     return AK_Success;
 }
 
-AKRESULT ObjectClusterFX::Term(AK::IAkPluginMemAlloc* in_pAllocator)
+AKRESULT SpatialClusteringFX::Term(AK::IAkPluginMemAlloc* in_pAllocator)
 {
     ReleaseMemory();
     AK_PLUGIN_DELETE(in_pAllocator, this);
     return AK_Success;
 }
 
-AKRESULT ObjectClusterFX::Reset()
+AKRESULT SpatialClusteringFX::Reset()
 {
     if (m_bEngineInitialized)
         m_engine.Reset();
@@ -335,7 +335,7 @@ AKRESULT ObjectClusterFX::Reset()
     return AK_Success;
 }
 
-AKRESULT ObjectClusterFX::GetPluginInfo(AkPluginInfo& out_rPluginInfo)
+AKRESULT SpatialClusteringFX::GetPluginInfo(AkPluginInfo& out_rPluginInfo)
 {
     out_rPluginInfo.eType = AkPluginTypeEffect;
     out_rPluginInfo.bIsInPlace = false;
@@ -344,7 +344,7 @@ AKRESULT ObjectClusterFX::GetPluginInfo(AkPluginInfo& out_rPluginInfo)
     return AK_Success;
 }
 
-void ObjectClusterFX::Execute(const AkAudioObjects& in_objects, const AkAudioObjects& out_objects)
+void SpatialClusteringFX::Execute(const AkAudioObjects& in_objects, const AkAudioObjects& out_objects)
 {
     ++m_uFrame;
 
@@ -389,7 +389,7 @@ void ObjectClusterFX::Execute(const AkAudioObjects& in_objects, const AkAudioObj
     RemoveStaleEntries();
 }
 
-void ObjectClusterFX::ReleaseMemory()
+void SpatialClusteringFX::ReleaseMemory()
 {
     if (m_bEngineInitialized)
         m_engine.Term();
@@ -424,14 +424,14 @@ void ObjectClusterFX::ReleaseMemory()
     m_uNumOutputs = 0;
 }
 
-void ObjectClusterFX::UpdateClusterParams(AkUInt16 in_uMaxFrames)
+void SpatialClusteringFX::UpdateClusterParams(AkUInt16 in_uMaxFrames)
 {
     if (in_uMaxFrames == m_uParamsMaxFrames && !m_pParams->m_paramChangeHandler.HasAnyChanged())
         return;
 
     m_uParamsMaxFrames = in_uMaxFrames;
 
-    const ObjectClusterRTPCParams& rtpc = m_pParams->RTPC;
+    const SpatialClusteringRTPCParams& rtpc = m_pParams->RTPC;
     const AkReal32 fFrameLength = static_cast<AkReal32>(in_uMaxFrames > 0 ? in_uMaxFrames : 1);
     const AkReal32 fSampleRate = static_cast<AkReal32>(m_uSampleRate > 0 ? m_uSampleRate : 48000);
     const AkReal32 fFrameSeconds = fFrameLength / fSampleRate;
@@ -455,7 +455,7 @@ void ObjectClusterFX::UpdateClusterParams(AkUInt16 in_uMaxFrames)
     m_pParams->m_paramChangeHandler.ResetAllParamChanges();
 }
 
-bool ObjectClusterFX::PrepareInputs(const AkAudioObjects& in_objects)
+bool SpatialClusteringFX::PrepareInputs(const AkAudioObjects& in_objects)
 {
     const AkUInt32 uNumInputs = in_objects.uNumObjects;
     if (!m_inputs.Resize(uNumInputs) || !m_inputPriorities.Resize(uNumInputs))
@@ -490,7 +490,7 @@ bool ObjectClusterFX::PrepareInputs(const AkAudioObjects& in_objects)
     return true;
 }
 
-AkUInt32 ObjectClusterFX::CreateOutputs(const AkAudioObjects& in_objects)
+AkUInt32 SpatialClusteringFX::CreateOutputs(const AkAudioObjects& in_objects)
 {
     m_requests.RemoveAll();
     bool bOutOfMemory = false;
@@ -585,7 +585,7 @@ AkUInt32 ObjectClusterFX::CreateOutputs(const AkAudioObjects& in_objects)
     return uCreated;
 }
 
-bool ObjectClusterFX::AddRequest(AkUInt32 in_uChannelConfig, AkUInt32 in_uSource, bool in_bIsCluster)
+bool SpatialClusteringFX::AddRequest(AkUInt32 in_uChannelConfig, AkUInt32 in_uSource, bool in_bIsCluster)
 {
     OutputRequest* pRequest = m_requests.AddLast();
     if (pRequest == nullptr)
@@ -598,7 +598,7 @@ bool ObjectClusterFX::AddRequest(AkUInt32 in_uChannelConfig, AkUInt32 in_uSource
     return true;
 }
 
-void ObjectClusterFX::RegisterOutput(const AkAudioObjects& in_objects, const OutputRequest& in_request, AkAudioObject* in_pObject)
+void SpatialClusteringFX::RegisterOutput(const AkAudioObjects& in_objects, const OutputRequest& in_request, AkAudioObject* in_pObject)
 {
     if (in_request.isCluster)
     {
@@ -635,7 +635,7 @@ void ObjectClusterFX::RegisterOutput(const AkAudioObjects& in_objects, const Out
     in_pObject->SetName(m_pAllocator, (szInputName != nullptr && szInputName[0] != '\0') ? szInputName : kPassthroughName);
 }
 
-bool ObjectClusterFX::FetchOutputs(AkUInt32 in_uExpected)
+bool SpatialClusteringFX::FetchOutputs(AkUInt32 in_uExpected)
 {
     m_uNumOutputs = 0;
 
@@ -669,7 +669,7 @@ bool ObjectClusterFX::FetchOutputs(AkUInt32 in_uExpected)
     return true;
 }
 
-bool ObjectClusterFX::BuildOutputIndex()
+bool SpatialClusteringFX::BuildOutputIndex()
 {
     m_pHashTableService->Reset(&m_outputIndices);
 
@@ -684,13 +684,13 @@ bool ObjectClusterFX::BuildOutputIndex()
     return true;
 }
 
-AkUInt32 ObjectClusterFX::FindOutput(AkAudioObjectID in_key) const
+AkUInt32 SpatialClusteringFX::FindOutput(AkAudioObjectID in_key) const
 {
     const AkInt32 iSlot = FindSlot(m_outputIndices, in_key);
     return iSlot >= 0 ? m_outputIndices.ValueAt(static_cast<AkUInt32>(iSlot)) : kInvalidIndex;
 }
 
-void ObjectClusterFX::ProcessPassthroughs(const AkAudioObjects& in_objects)
+void SpatialClusteringFX::ProcessPassthroughs(const AkAudioObjects& in_objects)
 {
     for (AkUInt32 i = 0; i < in_objects.uNumObjects; ++i)
     {
@@ -729,7 +729,7 @@ void ObjectClusterFX::ProcessPassthroughs(const AkAudioObjects& in_objects)
     }
 }
 
-void ObjectClusterFX::ProcessClusters(const AkAudioObjects& in_objects)
+void SpatialClusteringFX::ProcessClusters(const AkAudioObjects& in_objects)
 {
     const AkUInt32 uNumClusters = m_engine.GetClusterCount();
     if (!m_clusterOutputs.Resize(uNumClusters) || !m_clusterValidFrames.Resize(uNumClusters) || !m_clusterHasData.Resize(uNumClusters))
@@ -817,7 +817,7 @@ void ObjectClusterFX::ProcessClusters(const AkAudioObjects& in_objects)
     }
 }
 
-void ObjectClusterFX::ReleaseUnwrittenOutputs()
+void SpatialClusteringFX::ReleaseUnwrittenOutputs()
 {
     for (AkUInt32 i = 0; i < m_uNumOutputs; ++i)
     {
@@ -834,7 +834,7 @@ void ObjectClusterFX::ReleaseUnwrittenOutputs()
     }
 }
 
-void ObjectClusterFX::QueuePriority(AkAudioObject* in_pObject, AkPriority in_priority)
+void SpatialClusteringFX::QueuePriority(AkAudioObject* in_pObject, AkPriority in_priority)
 {
     if (m_pPriorityService == nullptr)
         return;
@@ -846,7 +846,7 @@ void ObjectClusterFX::QueuePriority(AkAudioObject* in_pObject, AkPriority in_pri
         m_priorityObjects.RemoveLast();
 }
 
-void ObjectClusterFX::ApplyPriorities()
+void SpatialClusteringFX::ApplyPriorities()
 {
     const AkUInt32 uCount = m_priorityObjects.Length();
     if (m_pPriorityService == nullptr || uCount == 0)
@@ -855,7 +855,7 @@ void ObjectClusterFX::ApplyPriorities()
     m_pPriorityService->SetPriorities(m_priorityObjects.Data(), uCount, m_priorityValues.Data());
 }
 
-void ObjectClusterFX::RemoveStaleEntries()
+void SpatialClusteringFX::RemoveStaleEntries()
 {
     const AkUInt32 uFrame = m_uFrame;
 
@@ -868,13 +868,13 @@ void ObjectClusterFX::RemoveStaleEntries()
         [this, uFrame](AkUInt32 in_uSlot) { return m_clusters.ValueAt(in_uSlot).lastFrame != uFrame; });
 }
 
-void ObjectClusterFX::KeepOutputsSilent(AkUInt32 in_uExpected)
+void SpatialClusteringFX::KeepOutputsSilent(AkUInt32 in_uExpected)
 {
     if (FetchOutputs(in_uExpected))
         SilenceOutputs();
 }
 
-void ObjectClusterFX::SilenceOutputs()
+void SpatialClusteringFX::SilenceOutputs()
 {
     for (AkUInt32 i = 0; i < m_uNumOutputs; ++i)
     {
@@ -888,7 +888,7 @@ void ObjectClusterFX::SilenceOutputs()
     }
 }
 
-void ObjectClusterFX::PostRateLimitedMessage(MessageKind in_kind, const char* in_szMessage, AK::Monitor::ErrorLevel in_level)
+void SpatialClusteringFX::PostRateLimitedMessage(MessageKind in_kind, const char* in_szMessage, AK::Monitor::ErrorLevel in_level)
 {
     if (m_aMessagePosted[in_kind] && m_uFrame - m_aMessageFrames[in_kind] < m_uMessageInterval)
         return;

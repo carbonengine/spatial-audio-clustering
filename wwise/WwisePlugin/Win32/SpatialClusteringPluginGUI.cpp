@@ -23,15 +23,15 @@ the specific language governing permissions and limitations under the License.
 
   Copyright (c) 2023 Audiokinetic Inc.
 *******************************************************************************/
-#pragma once
 
-#include "../ObjectClusterPlugin.h"
+#include "SpatialClusteringPluginGUI.h"
 
-class ObjectClusterPluginGUI final
-	: public AK::Wwise::Plugin::PluginMFCWindows<>
-	, public AK::Wwise::Plugin::GUIWindows
+SpatialClusteringPluginGUI::SpatialClusteringPluginGUI()
 {
-public:
-	ObjectClusterPluginGUI();
+}
 
-};
+AK_ADD_PLUGIN_CLASS_TO_CONTAINER(
+    SpatialClustering,            // Name of the plug-in container for this shared library
+    SpatialClusteringPluginGUI,   // Authoring plug-in class to add to the plug-in container
+    SpatialClusteringFX           // Corresponding Sound Engine plug-in class
+);

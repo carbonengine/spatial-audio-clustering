@@ -24,26 +24,9 @@ the specific language governing permissions and limitations under the License.
   Copyright (c) 2023 Audiokinetic Inc.
 *******************************************************************************/
 
-#pragma once
+#ifndef SpatialClusteringFXFactory_H
+#define SpatialClusteringFXFactory_H
 
-#include <AK/Wwise/Plugin.h>
+AK_STATIC_LINK_PLUGIN(SpatialClusteringFX)
 
-/// See https://www.audiokinetic.com/library/edge/?source=SDK&id=plugin__dll.html
-/// for the documentation about Authoring plug-ins
-class ObjectClusterPlugin final
-    : public AK::Wwise::Plugin::AudioPlugin
-{
-public:
-    /** @brief Creates the authoring plug-in. */
-    ObjectClusterPlugin();
-
-    /** @brief Destroys the authoring plug-in. */
-    ~ObjectClusterPlugin();
-
-    /// This function is called by Wwise to obtain parameters that will be written to a bank.
-    /// Because these can be changed at run-time, the parameter block should stay relatively small.
-    // Larger data should be put in the Data Block.
-    bool GetBankParameters(const GUID& in_guidPlatform, AK::Wwise::Plugin::DataWriter& in_dataWriter) const override;
-};
-
-AK_DECLARE_PLUGIN_CONTAINER(ObjectCluster);	// Exposes our PluginContainer structure that contains the info for our plugin
+#endif // SpatialClusteringFXFactory_H
