@@ -39,6 +39,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 PLUGIN_NAME = "SpatialClustering"
@@ -82,6 +83,31 @@ def run_wp(wp_py, *args):
         fail(f"wp.py {' '.join(args)} failed with exit code {result.returncode}")
 
 
+def has_visual_studio_2022():
+    """Returns True if wp.py can find the Visual Studio 2022 MSBuild it uses for vc170 projects."""
+    program_files = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+    vswhere = Path(program_files) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+    if not vswhere.is_file():
+        return False
+    result = subprocess.run(
+        [str(vswhere), "-version", "[17.0,18.0)", "-requires", "Microsoft.Component.MSBuild", "-prerelease",
+         "-property", "installationPath"],
+        capture_output=True, text=True)
+    return bool(result.stdout.strip())
+
+
+def run_msbuild(solution, configuration):
+    """Builds a solution that wp.py premake generated, with the same MSBuild arguments wp.py uses."""
+    if not shutil.which("msbuild"):
+        fail("msbuild is not on PATH; run this script from a Developer Command Prompt for VS 2026")
+    command = ["msbuild", solution, "/t:Build", f"/p:Configuration={configuration}", "/p:Platform=x64", "/m",
+               "/verbosity:minimal"]
+    print(f"\n> {' '.join(command)}", flush=True)
+    result = subprocess.run(command, cwd=WWISE_PROJECT)
+    if result.returncode != 0:
+        fail(f"msbuild {solution} failed with exit code {result.returncode}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--skip-build", action="store_true", help="package the plug-in that is already built")
@@ -113,7 +139,12 @@ def main():
         for platform, toolset, configurations in BUILDS:
             run_wp(wp_py, "premake", platform, "-t", toolset)
             for configuration in configurations:
-                run_wp(wp_py, "build", platform, "-c", configuration, "-x", "x64", "-t", toolset)
+                if platform == "Authoring" and not has_visual_studio_2022():
+                    # wp.py only looks for a Visual Studio 2022 installation to build vc170 projects. With the
+                    # v143 toolset installed in Visual Studio 2026 instead, MSBuild from VS 2026 builds the solution.
+                    run_msbuild(f"{PLUGIN_NAME}_Authoring_Windows_{toolset}.sln", configuration)
+                else:
+                    run_wp(wp_py, "build", platform, "-c", configuration, "-x", "x64", "-t", toolset)
         run_wp(wp_py, "build", "Documentation")
 
     # generate-bundle lists every package in the folder, so remove those left by earlier runs.
@@ -122,6 +153,13 @@ def main():
 
     for platform in PACKAGES:
         run_wp(wp_py, "package", platform, "--version", bundle_version)
+    # wp.py writes an archive for every configuration, also the ones not built, such as Debug authoring.
+    for package in WWISE_PROJECT.glob(f"{PLUGIN_NAME}_*.tar.xz"):
+        with tarfile.open(package, "r:xz") as archive:
+            empty = not any(member.isfile() for member in archive.getmembers())
+        if empty:
+            print(f"Leaving out empty package {package.name}")
+            package.unlink()
     run_wp(wp_py, "generate-bundle", "--version", bundle_version)
 
     out_dir = DIST_DIR / f"{PLUGIN_NAME}_{plugin_version}_Wwise{wwise_year}.{wwise_major}"

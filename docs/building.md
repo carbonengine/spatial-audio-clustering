@@ -5,7 +5,7 @@ See Audiokinetic's [Creating Audio Plug-ins](https://www.audiokinetic.com/en/pub
 ## Prerequisites
 
 - Wwise 2025.1 with the SDK (C++) and the Windows deployment platform for Visual Studio 2026 (vc180), installed through the Audiokinetic Launcher. The Windows plug-in build scripts and SDK libraries come with that deployment platform.
-- Visual Studio 2026 with the C++ desktop workload for the runtime plug-in.
+- Visual Studio 2026 with the C++ desktop workload for the runtime plug-in, and the Windows 11 SDK 10.0.22621.0 (an individual component in the Visual Studio Installer). The Wwise 2025.1 build scripts target that SDK version for vc170 and vc180, and the build fails if only a newer SDK is installed.
 - For the authoring plug-in, the vc170 toolset with MFC: Visual Studio 2022, or the MSVC v143 build tools and C++ MFC for v143 in Visual Studio 2026. The Wwise 2025.1 plug-in scripts do not accept Visual Studio 2026 for the Authoring target, and the authoring plug-in uses MFC.
 - Python 3, with the `markdown` and `jinja2` packages for the property help pages (`python -m pip install markdown jinja2`).
 
@@ -22,6 +22,12 @@ python "%WWISEROOT%\Scripts\Build\Plugins\wp.py" premake Authoring -t vc170
 python "%WWISEROOT%\Scripts\Build\Plugins\wp.py" build Authoring -c Release -x x64 -t vc170
 
 python "%WWISEROOT%\Scripts\Build\Plugins\wp.py" build Documentation
+```
+
+With only Visual Studio 2026 installed, `wp.py build Authoring` stops with "Could not find the Visual Studio Build Tools for vc170", because it looks for a Visual Studio 2022 installation to find MSBuild. The v143 toolset in Visual Studio 2026 builds the plug-in fine; run MSBuild on the solution that premake generated instead (`scripts/package.py` does this for you):
+
+```
+msbuild SpatialClustering_Authoring_Windows_vc170.sln /t:Build /p:Configuration=Release /p:Platform=x64 /m
 ```
 
 The build copies its outputs into the Wwise install:
