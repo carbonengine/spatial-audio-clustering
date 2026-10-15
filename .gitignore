@@ -475,3 +475,8 @@ ASALocalRun/
 .localhistory/
 
 # End of https://www.gitignore.io/api/archives,linux,xcode,macos,windows,visualstudio,premake-gmake
+
+### Spatial Clustering ###
+# Help pages and the missing-help report written by wp.py build Documentation
+wwise/WwisePlugin/res/Html/
+wwise/Output/
