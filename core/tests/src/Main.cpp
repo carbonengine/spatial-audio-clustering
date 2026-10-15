@@ -38,8 +38,9 @@ void PrintUsage()
         "      runs the assertion suite, or the tests whose name contains the filter; exits nonzero on failure\n"
         "  cluster_tests bench [--frames N] [--warmup N] [--seed N]\n"
         "      prints mean and p99 microseconds per Update for 64 to 1024 inputs\n"
-        "  cluster_tests scenario <name> [--csv file] [--seed N] [--frames N] [--shuffle] [--quiet]\n"
-        "      prints per-frame metrics of one scenario\n"
+        "  cluster_tests scenario <name> [--csv file] [--trace file] [--seed N] [--frames N] [--join-angle D] [--max-outputs N]\n"
+        "                         [--shuffle] [--quiet]\n"
+        "      prints per-frame metrics of one scenario; --trace writes every frame as JSON for viewer.html\n"
         "  cluster_tests list\n"
         "      prints the scenario names, default seeds and descriptions\n");
 }

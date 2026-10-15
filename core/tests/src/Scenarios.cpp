@@ -484,6 +484,116 @@ void BuildStress(Scenario& io_scenario, std::mt19937& io_random, KeySource& io_k
     AddOneShots(io_scenario, io_keys, io_random, centres, 233.0, 3.0, 0.0);
 }
 
+/** @brief Ship of the battle scenario, which its engine and weapon voices move with. */
+struct Ship
+{
+    Motion motion = Motion::Orbit; ///< Orbit around the listener or a straight fly-by.
+    Vec3 origin;                   ///< Position at frame zero.
+    Vec3 axis;                     ///< Unit rotation axis of an orbiting ship.
+    double degreesPerSecond = 0.0; ///< Rotation speed of an orbiting ship.
+    Vec3 velocity;                 ///< Velocity of a flying-by ship in units per second.
+};
+
+/** @brief Returns an offset in a random direction with a random length between two radii. */
+Vec3 RandomOffset(std::mt19937& io_random, double in_minRadius, double in_maxRadius)
+{
+    // Separate statements keep the order of the random draws the same on every compiler.
+    const Vec3 direction = RandomDirection(io_random);
+    return Scale(direction, Uniform(io_random, in_minRadius, in_maxRadius));
+}
+
+/** @brief Adds a voice at an offset from a ship's centre that moves with the ship. */
+SourceSpec& AddShipVoice(Scenario& io_scenario, KeySource& io_keys, const Ship& in_ship, const Vec3& in_offset)
+{
+    SourceSpec source;
+    source.key = io_keys.Next();
+    source.motion = in_ship.motion;
+    source.axis = in_ship.axis;
+    source.degreesPerSecond = in_ship.degreesPerSecond;
+    source.velocity = in_ship.velocity;
+    source.origin = Add(in_ship.origin, in_offset);
+    io_scenario.sources.push_back(source);
+    return io_scenario.sources.back();
+}
+
+void BuildBattle(Scenario& io_scenario, std::mt19937& io_random, KeySource& io_keys)
+{
+    io_scenario.description = "14 ships orbiting and flying past the listener, each with engine voices and 2 to 6 weapons that "
+                              "play 2 to 6 voices per shot, plus two ambience beds, for 8 s";
+    io_scenario.frames = SecondsToFrames(io_scenario, 8.0);
+    // Plug-in default settings.
+    io_scenario.params.dwellFrames = static_cast<uint32_t>(SecondsToFrames(io_scenario, 0.2));
+    io_scenario.params.crossfadeFrames = static_cast<uint32_t>(SecondsToFrames(io_scenario, 0.05));
+    io_scenario.params.loudnessSmoothing = static_cast<float>(std::exp(-io_scenario.frameSeconds / 0.05));
+    const double seconds = io_scenario.frames * io_scenario.frameSeconds;
+
+    for (int index = 0; index < 14; ++index)
+    {
+        Ship ship;
+        if (index % 3 == 2)
+        {
+            // Passes the listener at its closest distance at a random time during the scenario.
+            ship.motion = Motion::Linear;
+            const Vec3 travel = RandomDirection(io_random);
+            const Vec3 side = RotateAround(AnyPerpendicular(travel), travel, Uniform(io_random, 0.0, 2.0 * kPi));
+            const Vec3 closest = Scale(side, Uniform(io_random, 10.0, 80.0));
+            ship.velocity = Scale(travel, Uniform(io_random, 50.0, 180.0));
+            ship.origin = Add(closest, Scale(ship.velocity, -Uniform(io_random, 1.0, seconds - 1.0)));
+        }
+        else
+        {
+            ship.motion = Motion::Orbit;
+            // Mostly around the horizon, like ships around the player.
+            const Vec3 direction = RandomDirection(io_random);
+            ship.origin = Scale(Normalize(Vec3{direction.x, direction.y * 0.4, direction.z}), LogUniform(io_random, 40.0, 800.0));
+            const double tilt = ToRadians(Uniform(io_random, -20.0, 20.0));
+            ship.axis = Normalize(Vec3{std::sin(tilt), std::cos(tilt), 0.0});
+            const double speed = Uniform(io_random, 4.0, 25.0);
+            ship.degreesPerSecond = Uniform(io_random, 0.0, 1.0) < 0.5 ? -speed : speed;
+        }
+
+        // Voices sit up to 8 units from the ship's centre, so a ship covers a wider angle the closer it is.
+        const int engines = UniformInt(io_random, 1, 3);
+        for (int engine = 0; engine < engines; ++engine)
+        {
+            SourceSpec& voice = AddShipVoice(io_scenario, io_keys, ship, RandomOffset(io_random, 0.0, 8.0));
+            voice.loudness = static_cast<float>(Uniform(io_random, 0.05, 0.3));
+            voice.priority = static_cast<uint32_t>(UniformInt(io_random, 30, 60));
+        }
+
+        // Each weapon fires at its own rate, and every shot plays several voices at the weapon's hardpoint.
+        const int weapons = UniformInt(io_random, 2, 6);
+        for (int weapon = 0; weapon < weapons; ++weapon)
+        {
+            const Vec3 hardpoint = RandomOffset(io_random, 2.0, 8.0);
+            const int voicesPerShot = UniformInt(io_random, 2, 6);
+            const double interval = Uniform(io_random, 0.4, 1.5);
+            for (double shot = Uniform(io_random, 0.0, interval); shot < seconds; shot += interval * Uniform(io_random, 0.8, 1.2))
+            {
+                for (int layer = 0; layer < voicesPerShot; ++layer)
+                {
+                    SourceSpec& voice = AddShipVoice(io_scenario, io_keys, ship, Add(hardpoint, RandomOffset(io_random, 0.0, 1.0)));
+                    const double start = shot + Uniform(io_random, 0.0, 0.05);
+                    voice.startFrame = static_cast<int>(std::lround(start / io_scenario.frameSeconds));
+                    voice.endFrame = voice.startFrame + SecondsToFrames(io_scenario, Uniform(io_random, 0.15, 1.2));
+                    voice.loudness = static_cast<float>(Uniform(io_random, 0.05, 0.9));
+                    voice.priority = static_cast<uint32_t>(UniformInt(io_random, 20, 90));
+                }
+            }
+        }
+    }
+
+    for (int index = 0; index < 2; ++index)
+    {
+        SourceSpec bed;
+        bed.key = io_keys.Next();
+        bed.clusterable = false;
+        bed.loudness = 0.1f;
+        bed.origin = Scale(RandomDirection(io_random), 30.0);
+        io_scenario.sources.push_back(bed);
+    }
+}
+
 struct ScenarioEntry
 {
     const char* name;
@@ -494,6 +604,7 @@ const ScenarioEntry kScenarios[] = {
     {"static", 1001},     {"crossing", 1002}, {"oneshots", 1003}, {"jitter", 1004},
     {"passby", 1005},     {"squeeze", 1006},  {"nearfield", 1007}, {"groups", 1008},
     {"passthrough", 1009}, {"shuffle", 1010}, {"cloud", 1011},    {"stress", 1012},
+    {"battle", 1013},
 };
 }
 
@@ -581,6 +692,10 @@ bool BuildScenario(const std::string& in_name, uint32_t in_seed, Scenario& out_s
     else if (in_name == "stress")
     {
         BuildStress(out_scenario, random, keys);
+    }
+    else if (in_name == "battle")
+    {
+        BuildBattle(out_scenario, random, keys);
     }
     else
     {

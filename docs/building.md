@@ -45,7 +45,7 @@ The plug-in version is set in `wwise/SpatialClusteringVersion.h`. The bundle ver
 
 ## Testing without a game
 
-The `core/tests` folder builds a standalone program around `ClusterEngine`. It does not need the Wwise SDK. It contains an assertion test suite, 12 seeded scenarios (static groups, crossing groups, one-shots, jitter, budget changes, near field, passthrough and more) and a benchmark, which also times an update that lowers Max Outputs.
+The `core/tests` folder builds a standalone program around `ClusterEngine`. It does not need the Wwise SDK. It contains an assertion test suite, 13 seeded scenarios (static groups, crossing groups, one-shots, jitter, budget changes, near field, passthrough, a space battle and more) and a benchmark, which also times an update that lowers Max Outputs.
 
 ```
 cmake -S core/tests -B build/tests
@@ -58,6 +58,17 @@ Release\cluster_tests scenario oneshots --csv oneshots.csv
 ```
 
 Run `cluster_tests` with no arguments to see all modes and options. On Linux and macOS the program is in `build/tests` instead of `build/tests/Release`.
+
+### Watching a scenario
+
+`--trace` writes every frame of a scenario to a JSON file, which `core/tests/viewer.html` plays back in a browser. Open the viewer and drop the trace on it.
+
+```
+Release\cluster_tests scenario battle --trace battle.json
+Release\cluster_tests scenario battle --seed 42 --join-angle 10 --max-outputs 12 --trace battle.json
+```
+
+The viewer shows the scene from above twice, side by side: without clustering, where every voice needs its own audio object, and with Spatial Clustering. It counts the objects in both against an endpoint limit (128 by default, editable on the page), marks the voices that would fall back to the main mix without clustering, and sums up the peak, average and saving over the whole run. `--seed` picks a different random scene, and `--join-angle` and `--max-outputs` override the scenario's settings. Adding `#t=3.2` to the viewer's address opens it paused at that time.
 
 ## Testing in a game
 

@@ -13,7 +13,7 @@ Built for Wwise 2025.1.
 - Release bundle for the Wwise Launcher.
 - Help for every parameter in the Wwise property editor.
 - Version information in the authoring plug-in DLL.
-- A standalone program in `core/tests` with tests, scenarios and a benchmark for the clustering engine.
+- A standalone program in `core/tests` with tests, scenarios and a benchmark for the clustering engine, and a browser viewer that plays back a scenario frame by frame.
 
 ### Upgrading from 2.0.0 or earlier
 - Remove the old plug-in from your Wwise install before installing this one, since both use the same plug-in IDs. Uninstall it in the Wwise Launcher if you installed it there. Otherwise delete `ObjectCluster.dll` and `ObjectCluster.xml` from `Authoring\x64\Release\bin\Plugins`, and `ObjectCluster.dll` and `ObjectClusterFX.lib` from the `SDK` folders you built into.
