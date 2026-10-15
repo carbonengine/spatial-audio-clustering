@@ -482,3 +482,5 @@ wwise/WwisePlugin/res/Html/
 wwise/Output/
 # Release bundles written by scripts/package.py
 dist/
+# Personal editor settings
+.vscode/

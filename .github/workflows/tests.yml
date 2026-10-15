@@ -1,0 +1,27 @@
+# Builds the clustering engine's test program and runs its tests. This needs no Wwise SDK,
+# so it runs on GitHub-hosted runners. The Wwise plug-in itself is built with scripts/package.py.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core-tests:
+    name: Core tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S core/tests -B build/tests -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build/tests --config Release
+
+      - name: Test
+        run: ctest --test-dir build/tests -C Release --output-on-failure
