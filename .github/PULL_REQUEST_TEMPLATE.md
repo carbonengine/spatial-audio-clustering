@@ -7,4 +7,4 @@
 - [ ] The plug-in builds and was tested at runtime in Wwise or a game.
 
 **Docs**
-- [ ] If a parameter changed: `SpatialClustering.xml`, the help page in `wwise/WwisePlugin/res/Md/en`, `docs/parameters.md` and `CHANGELOG.md` are updated.
+- [ ] If a parameter changed: `SpatialClustering.xml`, the help page in `wwise/WwisePlugin/res/Md/en`, and the Parameters table in `README.md` are updated.

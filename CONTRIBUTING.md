@@ -19,7 +19,7 @@ Contributions are accepted under the [Apache License 2.0](LICENSE.txt), the lice
 
 ## Building and testing your changes
 
-[Building from source](docs/building.md) covers the toolchain, the plug-in build, the test program and ways to try the plug-in in a game. Changes to the clustering itself can be tested first with the test program in `core/tests`, which does not need the Wwise SDK.
+[Building from Source](README.md#building-from-source) in the README covers the toolchain, the plug-in build, the test program and ways to try the plug-in in a game. Changes to the clustering itself can be tested first with the test program in `core/tests`, which does not need the Wwise SDK.
 
 ## Where things are
 
@@ -34,6 +34,5 @@ Contributions are accepted under the [Apache License 2.0](LICENSE.txt), the lice
 | `wwise/SpatialClusteringVersion.h` | The plug-in version. |
 | `wwise/SpatialClusteringConfig.h` | The company and plug-in IDs. |
 | `scripts/package.py` | Builds and packages a release. |
-| `docs/` | User documentation. |
 
-When you add or change a parameter, update `SpatialClustering.xml`, `GetBankParameters` in `SpatialClusteringPlugin.cpp`, `SpatialClusteringFXParams`, the help page in `wwise/WwisePlugin/res/Md/en` and `docs/parameters.md`. The order in which `GetBankParameters` writes the values must match the order in which `SpatialClusteringFXParams` reads them.
+When you add or change a parameter, update `SpatialClustering.xml`, `GetBankParameters` in `SpatialClusteringPlugin.cpp`, `SpatialClusteringFXParams`, the help page in `wwise/WwisePlugin/res/Md/en` and the Parameters table in `README.md`. The order in which `GetBankParameters` writes the values must match the order in which `SpatialClusteringFXParams` reads them.

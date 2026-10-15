@@ -55,7 +55,7 @@ BUILDS = [
     ("Authoring", "vc170", ["Release"]),
 ]
 PACKAGES = ["Common", "Windows_vc180", "Authoring", "Documentation"]
-EXTRA_FILES = ["LICENSE.txt", "NOTICE", "CHANGELOG.md"]
+EXTRA_FILES = ["LICENSE.txt", "NOTICE"]
 
 
 def fail(message):
