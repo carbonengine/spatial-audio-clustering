@@ -480,3 +480,5 @@ ASALocalRun/
 # Help pages and the missing-help report written by wp.py build Documentation
 wwise/WwisePlugin/res/Html/
 wwise/Output/
+# Release bundles written by scripts/package.py
+dist/

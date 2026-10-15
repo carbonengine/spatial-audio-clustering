@@ -11,7 +11,7 @@
     "tag": "SpatialClustering",
 
     // Description displayed in the Wwise Launcher for this bundle
-    "description": "merges audio objects by direction from the listener",
+    "description": "Merges audio objects that reach the listener from similar directions into fewer outputs, to save system audio objects. Insert it as an Effect on an Audio Objects bus.",
 
     // Vendor name displayed in the Wwise Launcher for this bundle
     "vendor": "CCP Games",
@@ -59,12 +59,16 @@
 
     // Online documentation links for this bundle
     "links": [
-        // {
-        //     "displayName": string, // Name displayed in the Wwise Launcher for this link
-        //     "id": string, // Unique identifier of this link
-        //     "url": string // Target URL of this link
-        // },
-        // ...
+        {
+            "displayName": "Documentation",
+            "id": "documentation",
+            "url": "https://github.com/carbonengine/spatial-audio-clustering#readme"
+        },
+        {
+            "displayName": "Releases and changelog",
+            "id": "releases",
+            "url": "https://github.com/carbonengine/spatial-audio-clustering/releases"
+        }
     ],
 
     // Local documentation files for this bundle
