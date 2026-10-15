@@ -41,6 +41,7 @@ Plugin.authoring = {}
 -- SDK STATIC PLUGIN SECTION
 Plugin.sdk.static.includedirs = -- https://github.com/premake/premake-core/wiki/includedirs
 {
+    "../../core/src",
 }
 Plugin.sdk.static.files = -- https://github.com/premake/premake-core/wiki/files
 {
@@ -48,6 +49,8 @@ Plugin.sdk.static.files = -- https://github.com/premake/premake-core/wiki/files
     "**.h",
     "**.hpp",
     "**.c",
+    "../../core/src/ClusterEngine.cpp",
+    "../../core/src/ClusterEngine.h",
 }
 Plugin.sdk.static.excludes = -- https://github.com/premake/premake-core/wiki/removefiles
 {

@@ -17,7 +17,7 @@ Unlike traditional Effect Plug-Ins which are agnostic to Audio Objects, Object P
 - **Output budget**: an optional limit on the number of outputs. When the limit is reached, the closest clusters are merged.
 - **Passthrough**: multichannel inputs (ambiences, beds) and inputs without 3D spatialization pass through with their audio and metadata unchanged.
 - **Exclusions**: high priority inputs and inputs close to the listener can be kept out of clusters.
-- **Real-time safe**: memory comes from the Wwise plug-in allocator. It is reserved for 64 inputs in Init and grows only when more inputs arrive. An update for 512 inputs takes about 30 to 60 µs in the [harness](#testing-without-a-game) bench. Lowering Max Outputs far below the current number of clusters merges them all in one update, which takes about 0.7 to 1.4 ms for 512 inputs and 1.5 to 3.5 ms for 1024 inputs in the same bench.
+- **Real-time safe**: memory comes from the Wwise plug-in allocator. It is reserved for 64 inputs in Init and grows only when more inputs arrive. An update for 512 inputs takes about 30 to 60 µs in the [benchmark](#testing-without-a-game). Lowering Max Outputs far below the current number of clusters merges them all in one update, which takes about 0.7 to 1.4 ms for 512 inputs and 1.5 to 3.5 ms for 1024 inputs in the same bench.
 
 ## Perfect For
 
@@ -158,11 +158,11 @@ To place breakpoints and debug the plugin follow the steps [here](https://www.au
 
 | Path | Contents |
 |---|---|
-| `SoundEnginePlugin/ClusterEngine.h/.cpp` | The clustering. Plain C++17 with no Wwise headers; all memory goes through a `ClusterAllocator`. |
-| `SoundEnginePlugin/ObjectClusterFX.h/.cpp` | The Wwise object processor: reads the input objects, runs the engine, creates and updates output objects and mixes the inputs into them with gain ramps. |
-| `SoundEnginePlugin/ObjectClusterFXParams.h/.cpp` | Parameters, read from banks and RTPCs. |
-| `WwisePlugin/` | The authoring plug-in and the property definitions (`ObjectCluster.xml`). |
-| `harness/` | Standalone tests, scenarios and benchmark for the engine. Not part of the plug-in build. |
+| `core/src/ClusterEngine.h/.cpp` | The clustering. Plain C++17 with no Wwise headers; all memory goes through a `ClusterAllocator`. |
+| `wwise/SoundEnginePlugin/ObjectClusterFX.h/.cpp` | The Wwise object processor: reads the input objects, runs the engine, creates and updates output objects and mixes the inputs into them with gain ramps. |
+| `wwise/SoundEnginePlugin/ObjectClusterFXParams.h/.cpp` | Parameters, read from banks and RTPCs. |
+| `wwise/WwisePlugin/` | The authoring plug-in and the property definitions (`ObjectCluster.xml`). |
+| `core/tests/` | Standalone tests, scenarios and benchmark for the engine. Not part of the plug-in build. |
 
 ## Getting Started
 
@@ -177,7 +177,7 @@ See Audiokinetic's [Creating Audio Plug-ins](https://www.audiokinetic.com/en/pub
 
 ### Building from Source
 
-Run these commands from the repository root in a Developer Command Prompt for VS 2026, with `WWISEROOT` set to your Wwise install:
+Run these commands from the `wwise` folder in a Developer Command Prompt for VS 2026, with `WWISEROOT` set to your Wwise install:
 
 ```
 python "%WWISEROOT%\Scripts\Build\Plugins\wp.py" premake Windows_vc180 -t vc180
@@ -196,19 +196,19 @@ To also copy the runtime DLL somewhere else after each build, set `CUSTOM_WWISE_
 
 ## Testing Without a Game
 
-The `harness` folder builds a standalone program around `ClusterEngine`. It does not need the Wwise SDK. It contains an assertion test suite, 12 seeded scenarios (static groups, crossing groups, one-shots, jitter, budget changes, near field, passthrough and more) and a benchmark, which also times an update that lowers Max Outputs.
+The `core/tests` folder builds a standalone program around `ClusterEngine`. It does not need the Wwise SDK. It contains an assertion test suite, 12 seeded scenarios (static groups, crossing groups, one-shots, jitter, budget changes, near field, passthrough and more) and a benchmark, which also times an update that lowers Max Outputs.
 
 ```
-cmake -S harness -B harness/build
-cmake --build harness/build --config Release
-cd harness/build
+cmake -S core/tests -B build/tests
+cmake --build build/tests --config Release
+cd build/tests
 ctest -C Release
-Release\cluster_harness bench
-Release\cluster_harness list
-Release\cluster_harness scenario oneshots --csv oneshots.csv
+Release\cluster_tests bench
+Release\cluster_tests list
+Release\cluster_tests scenario oneshots --csv oneshots.csv
 ```
 
-Run `cluster_harness` with no arguments to see all modes and options. On Linux and macOS the program is in `harness/build` instead of `harness/build/Release`.
+Run `cluster_tests` with no arguments to see all modes and options. On Linux and macOS the program is in `build/tests` instead of `build/tests/Release`.
 
 ## Contributing
 
@@ -221,7 +221,7 @@ We welcome contributions: feature requests, bug fixes, documentation improvement
 
 ### Submitting a Pull Request
 - Fork the repository and create a feature branch
-- Run the harness tests, and include bench results if you change `ClusterEngine`
+- Run the tests in `core/tests`, and include bench results if you change `ClusterEngine`
 - Build and test your changes at runtime before submitting.
 - Submit a PR with a clear description of what changed and why
 
@@ -229,7 +229,7 @@ We welcome contributions: feature requests, bug fixes, documentation improvement
 
 Wwise offers a free personal license that includes the C++ SDK and CLI tools needed to build this plugin. To get started, see [Creating Audio Plug-ins](https://www.audiokinetic.com/en/public-library/2025.1.7_9143/?source=SDK&id=effectplugin_tools_newplugin.html) in the Wwise docs.
 
-Changes to the clustering itself can be tested first with the [harness](#testing-without-a-game). Once the plugin builds, you'll want a scene to exercise it in. A few options:
+Changes to the clustering itself can be tested first with the [test program](#testing-without-a-game). Once the plugin builds, you'll want a scene to exercise it in. A few options:
 - **Unreal Engine 5 or Unity** with the Wwise integration.
 - **[Wwise Integration Demo Sample](https://www.audiokinetic.com/en/public-library/2025.1.7_9143/?source=SDK&id=soundengine_integration_samplecode.html)**: a lightweight executable with various demos that you can build and modify yourself.
 - **[Wwise sample games](https://www.audiokinetic.com/en/learning/samples/?searchToken=eyJwZ0Nfc2FtIjoiMSIsInBnU19zYW0iOiIxMDAiLCJzYW1fc3QiOiIifQ%3D%3D)** provided by Audiokinetic.

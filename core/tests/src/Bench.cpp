@@ -21,8 +21,8 @@
  */
 
 #include "FrameAnalysis.h"
-#include "HarnessMath.h"
-#include "HarnessModes.h"
+#include "MathConstants.h"
+#include "Modes.h"
 #include "Scenarios.h"
 
 #include <algorithm>

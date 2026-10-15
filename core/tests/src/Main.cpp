@@ -20,7 +20,7 @@
  * EVE Online and EVE Frontier are registered trademarks of CCP ehf.
  */
 
-#include "HarnessModes.h"
+#include "Modes.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -34,13 +34,13 @@ void PrintUsage()
 {
     std::printf(
         "usage:\n"
-        "  cluster_harness test [name filter]\n"
+        "  cluster_tests test [name filter]\n"
         "      runs the assertion suite, or the tests whose name contains the filter; exits nonzero on failure\n"
-        "  cluster_harness bench [--frames N] [--warmup N] [--seed N]\n"
+        "  cluster_tests bench [--frames N] [--warmup N] [--seed N]\n"
         "      prints mean and p99 microseconds per Update for 64 to 1024 inputs\n"
-        "  cluster_harness scenario <name> [--csv file] [--seed N] [--frames N] [--shuffle] [--quiet]\n"
+        "  cluster_tests scenario <name> [--csv file] [--seed N] [--frames N] [--shuffle] [--quiet]\n"
         "      prints per-frame metrics of one scenario\n"
-        "  cluster_harness list\n"
+        "  cluster_tests list\n"
         "      prints the scenario names, default seeds and descriptions\n");
 }
 }

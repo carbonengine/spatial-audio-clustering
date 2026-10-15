@@ -21,7 +21,7 @@
  */
 
 #include "FrameAnalysis.h"
-#include "HarnessModes.h"
+#include "Modes.h"
 #include "Scenarios.h"
 
 #include <algorithm>
@@ -63,7 +63,7 @@ int RunScenarioMode(const std::vector<std::string>& in_args)
 {
     if (in_args.empty())
     {
-        std::printf("scenario mode needs a name; run 'cluster_harness list' to see them\n");
+        std::printf("scenario mode needs a name; run 'cluster_tests list' to see them\n");
         return 2;
     }
     const std::string name = in_args[0];
@@ -113,7 +113,7 @@ int RunScenarioMode(const std::vector<std::string>& in_args)
     Scenario scenario;
     if (!BuildScenario(name, seed, scenario))
     {
-        std::printf("unknown scenario '%s'; run 'cluster_harness list' to see them\n", name.c_str());
+        std::printf("unknown scenario '%s'; run 'cluster_tests list' to see them\n", name.c_str());
         return 2;
     }
     if (hasFrames)

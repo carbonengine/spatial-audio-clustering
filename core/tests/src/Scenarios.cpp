@@ -21,7 +21,7 @@
  */
 
 #include "Scenarios.h"
-#include "HarnessMath.h"
+#include "MathConstants.h"
 
 #include <algorithm>
 #include <cmath>

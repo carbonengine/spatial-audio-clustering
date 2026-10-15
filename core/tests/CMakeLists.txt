@@ -19,7 +19,7 @@
 # EVE Online and EVE Frontier are registered trademarks of CCP ehf.
 
 cmake_minimum_required(VERSION 3.16)
-project(ClusterHarness LANGUAGES CXX)
+project(ClusterTests LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -29,12 +29,12 @@ if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(ENGINE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../SoundEnginePlugin)
+set(ENGINE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 
-add_executable(cluster_harness
+add_executable(cluster_tests
     src/Main.cpp
-    src/HarnessMath.h
-    src/HarnessModes.h
+    src/MathConstants.h
+    src/Modes.h
     src/Scenarios.cpp
     src/Scenarios.h
     src/FrameAnalysis.cpp
@@ -45,13 +45,13 @@ add_executable(cluster_harness
     ${ENGINE_DIR}/ClusterEngine.cpp
     ${ENGINE_DIR}/ClusterEngine.h)
 
-target_include_directories(cluster_harness PRIVATE ${ENGINE_DIR} src)
+target_include_directories(cluster_tests PRIVATE ${ENGINE_DIR} src)
 
 if(MSVC)
-    target_compile_options(cluster_harness PRIVATE /W4 /permissive-)
+    target_compile_options(cluster_tests PRIVATE /W4 /permissive-)
 else()
-    target_compile_options(cluster_harness PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(cluster_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 enable_testing()
-add_test(NAME cluster_engine_tests COMMAND cluster_harness test)
+add_test(NAME cluster_engine_tests COMMAND cluster_tests test)
