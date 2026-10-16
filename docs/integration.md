@@ -4,7 +4,7 @@ The runtime plug-in must come from the same Wwise version as your game, since th
 
 - **Static linking**: link `SpatialClusteringFX.lib` from `SDK\x64_vc180\<Config>\lib` and include `<AK/Plugin/SpatialClusteringFXFactory.h>` in one source file.
 - **Dynamic loading**: ship `SpatialClustering.dll` from `SDK\x64_vc180\<Config>\bin` next to the executable, or in the folder set in `AkInitSettings::szPluginDLLPath`.
-- **CMake**: build the plug-in from source with your game, see [Build with CMake](building.md#build-with-cmake). Link `SpatialClustering::SpatialClusteringFX` from `find_package(SpatialClustering CONFIG)` and include `<AK/Plugin/SpatialClusteringFXFactory.h>` in one source file.
+- **CMake**: build the plug-in from source with your game, see [Build with CMake](building.md#build-with-cmake). Link `SpatialClustering::SpatialClusteringFX`, from `find_package(SpatialClustering CONFIG)` or from `add_subdirectory` on this repository, and include `<AK/Plugin/SpatialClusteringFXFactory.h>` in one source file.
 - **Unity and Unreal**: add the plug-in to your project's Wwise integration the way Audiokinetic describes for plug-ins, using the same files.
 
 ## Upgrading from 2.0.0 or Earlier

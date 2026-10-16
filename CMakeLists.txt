@@ -32,6 +32,15 @@ project(SpatialClustering VERSION ${SPATIALCLUSTERING_VERSION} LANGUAGES CXX)
 
 option(SPATIALCLUSTERING_BUILD_AUTHORING "Build the Wwise authoring plug-in (Windows only)" OFF)
 
+# A game that adds the plug-in with add_subdirectory links it into its own binaries, so by
+# default only a standalone build installs it.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    set(SPATIALCLUSTERING_STANDALONE ON)
+else()
+    set(SPATIALCLUSTERING_STANDALONE OFF)
+endif()
+option(SPATIALCLUSTERING_INSTALL "Generate the install rules" ${SPATIALCLUSTERING_STANDALONE})
+
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
@@ -81,23 +90,25 @@ target_link_libraries(SpatialClusteringFX PRIVATE $<BUILD_INTERFACE:Wwise::Wwise
 target_compile_features(SpatialClusteringFX PRIVATE cxx_std_17)
 target_compile_options(SpatialClusteringFX PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/utf-8>)
 
-install(TARGETS SpatialClusteringFX EXPORT SpatialClusteringTargets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT Runtime)
-install(FILES ${SPATIALCLUSTERING_INCLUDE_DIR}/AK/Plugin/SpatialClusteringFXFactory.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/AK/Plugin COMPONENT Runtime)
+if(SPATIALCLUSTERING_INSTALL)
+    install(TARGETS SpatialClusteringFX EXPORT SpatialClusteringTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT Runtime)
+    install(FILES ${SPATIALCLUSTERING_INCLUDE_DIR}/AK/Plugin/SpatialClusteringFXFactory.h
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/AK/Plugin COMPONENT Runtime)
 
-set(SPATIALCLUSTERING_CONFIG_DIR ${CMAKE_INSTALL_DATADIR}/SpatialClustering)
-install(EXPORT SpatialClusteringTargets
-    NAMESPACE SpatialClustering::
-    DESTINATION ${SPATIALCLUSTERING_CONFIG_DIR}
-    COMPONENT Runtime)
-write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/SpatialClusteringConfigVersion.cmake
-    COMPATIBILITY SameMajorVersion)
-install(FILES
-        cmake/SpatialClusteringConfig.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/SpatialClusteringConfigVersion.cmake
-    DESTINATION ${SPATIALCLUSTERING_CONFIG_DIR}
-    COMPONENT Runtime)
+    set(SPATIALCLUSTERING_CONFIG_DIR ${CMAKE_INSTALL_DATADIR}/SpatialClustering)
+    install(EXPORT SpatialClusteringTargets
+        NAMESPACE SpatialClustering::
+        DESTINATION ${SPATIALCLUSTERING_CONFIG_DIR}
+        COMPONENT Runtime)
+    write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/SpatialClusteringConfigVersion.cmake
+        COMPATIBILITY SameMajorVersion)
+    install(FILES
+            cmake/SpatialClusteringConfig.cmake
+            ${CMAKE_CURRENT_BINARY_DIR}/SpatialClusteringConfigVersion.cmake
+        DESTINATION ${SPATIALCLUSTERING_CONFIG_DIR}
+        COMPONENT Runtime)
+endif()
 
 # Authoring plug-in. Install it into a Wwise install, or a copy of one, with
 #   cmake --install <build> --config Release --component Authoring --prefix <Wwise install>
@@ -138,26 +149,28 @@ if(SPATIALCLUSTERING_BUILD_AUTHORING)
     target_link_options(SpatialClusteringAuthoring PRIVATE /DEBUG /OPT:REF /OPT:ICF)
     target_link_libraries(SpatialClusteringAuthoring PRIVATE SpatialClusteringFXAuthoring)
 
-    # Same layout as a Wwise install: the plug-in and its XML next to the other authoring
-    # plug-ins, and the property help where the property editor looks for it.
-    set(SPATIALCLUSTERING_AUTHORING_PLUGIN_DIR Authoring/x64/Release/bin/Plugins)
-    install(FILES
-            $<TARGET_FILE:SpatialClusteringAuthoring>
-            wwise/WwisePlugin/SpatialClustering.xml
-        DESTINATION ${SPATIALCLUSTERING_AUTHORING_PLUGIN_DIR}
-        COMPONENT Authoring)
-    install(FILES $<TARGET_PDB_FILE:SpatialClusteringAuthoring>
-        DESTINATION ${SPATIALCLUSTERING_AUTHORING_PLUGIN_DIR}
-        COMPONENT Authoring
-        OPTIONAL)
-
-    # wp.py build Documentation generates the help pages from wwise/WwisePlugin/res/Md.
-    set(SPATIALCLUSTERING_HELP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/wwise/WwisePlugin/res/Html)
-    if(EXISTS ${SPATIALCLUSTERING_HELP_DIR})
-        install(DIRECTORY ${SPATIALCLUSTERING_HELP_DIR}/
-            DESTINATION Authoring/Data/Plugins/SpatialClustering/Html
+    if(SPATIALCLUSTERING_INSTALL)
+        # Same layout as a Wwise install: the plug-in and its XML next to the other authoring
+        # plug-ins, and the property help where the property editor looks for it.
+        set(SPATIALCLUSTERING_AUTHORING_PLUGIN_DIR Authoring/x64/Release/bin/Plugins)
+        install(FILES
+                $<TARGET_FILE:SpatialClusteringAuthoring>
+                wwise/WwisePlugin/SpatialClustering.xml
+            DESTINATION ${SPATIALCLUSTERING_AUTHORING_PLUGIN_DIR}
             COMPONENT Authoring)
-    else()
-        message(WARNING "wwise/WwisePlugin/res/Html does not exist, so the property help is not installed. Run wp.py build Documentation in the wwise folder to generate it.")
+        install(FILES $<TARGET_PDB_FILE:SpatialClusteringAuthoring>
+            DESTINATION ${SPATIALCLUSTERING_AUTHORING_PLUGIN_DIR}
+            COMPONENT Authoring
+            OPTIONAL)
+
+        # wp.py build Documentation generates the help pages from wwise/WwisePlugin/res/Md.
+        set(SPATIALCLUSTERING_HELP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/wwise/WwisePlugin/res/Html)
+        if(EXISTS ${SPATIALCLUSTERING_HELP_DIR})
+            install(DIRECTORY ${SPATIALCLUSTERING_HELP_DIR}/
+                DESTINATION Authoring/Data/Plugins/SpatialClustering/Html
+                COMPONENT Authoring)
+        else()
+            message(WARNING "wwise/WwisePlugin/res/Html does not exist, so the property help is not installed. Run wp.py build Documentation in the wwise folder to generate it.")
+        endif()
     endif()
 endif()
