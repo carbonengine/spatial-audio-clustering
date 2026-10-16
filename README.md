@@ -86,10 +86,24 @@ Other platforms are not released yet. They can be built from source with the mat
 
 ## Contributing
 
-We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions are welcome. Please read the Carbon Engine [contributing guide](https://github.com/carbonengine/.github/blob/main/CONTRIBUTING.md) before opening an issue or pull request. It covers the workflow, the CLA and the pull request template, and applies to every `carbonengine` repository. Please also follow the [Code of Conduct](https://github.com/carbonengine/.github/blob/main/CODE_OF_CONDUCT.md), and report security issues privately as described in the [Security Policy](https://github.com/carbonengine/.github/blob/main/SECURITY.md) rather than in a public issue.
+
+### Opening an Issue
+- Search existing open and closed issues before creating a new one
+- For feature requests, include the use case
+- For bug reports, include steps to reproduce and expected behavior
+
+### Submitting a Pull Request
+- Fork the repository and create a feature branch
+- Build and test your changes at runtime before submitting.
+- Submit a PR with a clear description of what changed and why
+
+### Building and Testing Your Changes
 
 ## License
 
-© 2024 - present CCP ehf.
+© 2026 Fenris Creations
 
-Developed by CCP Games for spatial audio object clustering in EVE Online and EVE Frontier, using the Audiokinetic Wwise SDK. Licensed under the [Apache License 2.0](LICENSE.txt). See [NOTICE](NOTICE) for third-party notices.
+This software was developed by Fenris Creations for spatial audio object clustering in EVE Online and EVE Frontier, using the Audiokinetic Wwise SDK.
+
+This project is licensed under the [Apache License 2.0](LICENSE.txt).
