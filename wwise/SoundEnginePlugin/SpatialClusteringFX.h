@@ -215,7 +215,7 @@ private:
     ClusterEngine m_engine;                   ///< Cluster engine.
     bool m_bEngineInitialized;                ///< True once Init was called on the cluster engine.
     ClusterParams m_clusterParams;            ///< Cluster engine settings for the current parameters.
-    AkReal32 m_fSpreadFromSize;               ///< Share of the cluster's angular size used as its minimum spread.
+    AkReal32 m_fClusterSpread;               ///< Share of the cluster's angular size used as its minimum spread.
     AkUInt32 m_uSampleRate;                   ///< Sample rate in Hz.
     AkUInt16 m_uParamsMaxFrames;              ///< Buffer length the cluster engine settings were computed for.
     AkUInt32 m_uMessageInterval;              ///< Minimum number of frames between two messages of the same kind.

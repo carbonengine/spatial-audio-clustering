@@ -38,14 +38,14 @@ SpatialClusteringPlugin::~SpatialClusteringPlugin()
 bool SpatialClusteringPlugin::GetBankParameters(const GUID& in_guidPlatform, AK::Wwise::Plugin::DataWriter& in_dataWriter) const
 {
     // Write bank data here
-    return in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:joinAngle"))
-        && in_dataWriter.WriteInt32(m_propertySet.GetInt32(in_guidPlatform, "CCP:maxOutputs"))
-        && in_dataWriter.WriteInt32(m_propertySet.GetInt32(in_guidPlatform, "CCP:excludePriorityAbove"))
-        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:nearFieldRadius"))
-        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:dwellTime"))
+    return in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:clusterWidth"))
+        && in_dataWriter.WriteInt32(m_propertySet.GetInt32(in_guidPlatform, "CCP:objectLimit"))
+        && in_dataWriter.WriteInt32(m_propertySet.GetInt32(in_guidPlatform, "CCP:priorityThreshold"))
+        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:proximityRadius"))
+        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:holdTime"))
         && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:crossfadeTime"))
-        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:distanceWeight"))
-        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:spreadFromSize"));
+        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:distanceSensitivity"))
+        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:clusterSpread"));
 }
 
 AK_DEFINE_PLUGIN_CONTAINER(SpatialClustering);											// Create a PluginContainer structure that contains the info for our plugin

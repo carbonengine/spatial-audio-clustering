@@ -1,4 +1,4 @@
-## Near-Field Radius
+## Proximity Radius
 
 Inputs closer to the listener than this distance get an output of their own and are never merged.
 

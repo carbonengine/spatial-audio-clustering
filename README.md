@@ -64,7 +64,7 @@ Upgrading from 2.0.0 or earlier? Remove the old plug-in first, see [Upgrading](d
    ![Spatial Clustering inserted on an Audio Objects bus in Wwise](https://github.com/user-attachments/assets/88c217c1-87c9-4132-aba8-04eede2d46e1)
 
 3. Route the sounds you want merged to that bus. Mono and stereo sounds with 3D spatialization and Speaker Panning / 3D Spatialization Mix at 100 are clustered. Everything else passes through.
-4. Start with the default settings. Watch the clusters in the Audio Object 3D Viewer, then tune the [parameters](docs/parameters.md). Most scenes only need **Join Angle**, plus **Max Outputs** for a fixed object budget.
+4. Start with the default settings. Watch the clusters in the Audio Object 3D Viewer, then tune the [parameters](docs/parameters.md). Most scenes only need **Cluster Width**, plus **Object Limit** for a fixed object budget.
 
    ![Clusters in the Wwise Audio Object profiler views](https://github.com/user-attachments/assets/d46c84bb-196e-4c2a-b932-62920066b516)
 

@@ -33,36 +33,36 @@ the specific language governing permissions and limitations under the License.
 // Add parameters IDs here, those IDs should map to the AudioEnginePropertyID
 // attributes in the xml property definition. They follow the order of the
 // property editor, which is also the order of the parameter block.
-/// ID of the join angle parameter.
-static const AkPluginParamID PARAM_JOIN_ANGLE_ID = 0;
-/// ID of the maximum number of outputs parameter.
-static const AkPluginParamID PARAM_MAX_OUTPUTS_ID = 1;
-/// ID of the parameter that sets the priority above which inputs are never merged.
-static const AkPluginParamID PARAM_EXCLUDE_PRIORITY_ABOVE_ID = 2;
-/// ID of the near-field radius parameter.
-static const AkPluginParamID PARAM_NEAR_FIELD_RADIUS_ID = 3;
-/// ID of the dwell time parameter.
-static const AkPluginParamID PARAM_DWELL_TIME_ID = 4;
+/// ID of the cluster width parameter.
+static const AkPluginParamID PARAM_CLUSTER_WIDTH_ID = 0;
+/// ID of the object limit parameter.
+static const AkPluginParamID PARAM_OBJECT_LIMIT_ID = 1;
+/// ID of the priority threshold parameter.
+static const AkPluginParamID PARAM_PRIORITY_THRESHOLD_ID = 2;
+/// ID of the proximity radius parameter.
+static const AkPluginParamID PARAM_PROXIMITY_RADIUS_ID = 3;
+/// ID of the hold time parameter.
+static const AkPluginParamID PARAM_HOLD_TIME_ID = 4;
 /// ID of the crossfade time parameter.
 static const AkPluginParamID PARAM_CROSSFADE_TIME_ID = 5;
-/// ID of the distance weight parameter.
-static const AkPluginParamID PARAM_DISTANCE_WEIGHT_ID = 6;
-/// ID of the spread from cluster size parameter.
-static const AkPluginParamID PARAM_SPREAD_FROM_SIZE_ID = 7;
+/// ID of the distance sensitivity parameter.
+static const AkPluginParamID PARAM_DISTANCE_SENSITIVITY_ID = 6;
+/// ID of the cluster spread parameter.
+static const AkPluginParamID PARAM_CLUSTER_SPREAD_ID = 7;
 /// Number of parameters.
 static const AkUInt32 NUM_PARAMS = 8;
 
-/// Largest join angle in degrees.
-static const AkReal32 PARAM_JOIN_ANGLE_MAX = 180.f;
-/// Largest dwell time in milliseconds.
-static const AkReal32 PARAM_DWELL_TIME_MAX = 5000.f;
+/// Largest cluster width in degrees.
+static const AkReal32 PARAM_CLUSTER_WIDTH_MAX = 180.f;
+/// Largest hold time in milliseconds.
+static const AkReal32 PARAM_HOLD_TIME_MAX = 5000.f;
 /// Largest crossfade time in milliseconds.
 static const AkReal32 PARAM_CROSSFADE_TIME_MAX = 1000.f;
-/// Largest maximum number of outputs.
-static const AkInt32 PARAM_MAX_OUTPUTS_MAX = 512;
-/// Largest near-field radius in game units.
-static const AkReal32 PARAM_NEAR_FIELD_RADIUS_MAX = 1000000.f;
-/// Largest playback priority, which is also the largest Exclude Priority Above value.
+/// Largest object limit.
+static const AkInt32 PARAM_OBJECT_LIMIT_MAX = 512;
+/// Largest proximity radius in game units.
+static const AkReal32 PARAM_PROXIMITY_RADIUS_MAX = 1000000.f;
+/// Largest playback priority, which is also the largest Priority Threshold value.
 static const AkInt32 PARAM_PRIORITY_MAX = 100;
 
 /// Size in bytes of the parameter block that the authoring plug-in writes to banks.
@@ -71,14 +71,14 @@ static const AkUInt32 PARAMS_BLOCK_SIZE = 6 * sizeof(AkReal32) + 2 * sizeof(AkIn
 /** @brief Parameters of the effect, all of which RTPCs can drive. */
 struct SpatialClusteringRTPCParams
 {
-    AkReal32 joinAngle;           ///< Angle in degrees under which an input may join a cluster.
-    AkInt32 maxOutputs;           ///< Maximum number of outputs, passthrough inputs included; 0 means no limit.
-    AkInt32 excludePriorityAbove; ///< Inputs with a higher priority are never merged.
-    AkReal32 nearFieldRadius;     ///< Inputs closer to the listener than this distance in game units are never merged.
-    AkReal32 dwellTime;           ///< Time in milliseconds a change must last before an input leaves its cluster or two clusters merge.
+    AkReal32 clusterWidth;        ///< Angle in degrees under which an input may join a cluster.
+    AkInt32 objectLimit;          ///< Maximum number of outputs, passthrough inputs included; 0 means no limit.
+    AkInt32 priorityThreshold;    ///< Inputs with a higher priority are never merged.
+    AkReal32 proximityRadius;     ///< Inputs closer to the listener than this distance in game units are never merged.
+    AkReal32 holdTime;            ///< Time in milliseconds a change must last before an input leaves its cluster or two clusters merge.
     AkReal32 crossfadeTime;       ///< Time in milliseconds over which a moving input fades between clusters.
-    AkReal32 distanceWeight;      ///< How much a difference in distance counts against the join angle.
-    AkReal32 spreadFromSize;      ///< Share of the cluster's angular size used as its minimum spread.
+    AkReal32 distanceSensitivity; ///< How much a difference in distance counts against the cluster width.
+    AkReal32 clusterSpread;       ///< Share of the cluster's angular size used as its minimum spread.
 };
 
 /** @brief Parameter node of the Spatial Clustering effect. */

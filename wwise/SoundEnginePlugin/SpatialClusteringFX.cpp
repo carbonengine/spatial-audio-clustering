@@ -87,8 +87,8 @@ namespace
     /** @brief Message posted when memory runs out. */
     const char kOutOfMemoryMessage[] = "Spatial Clustering ran out of memory, so some audio may drop out.";
 
-    /** @brief Message posted when the inputs that are left cannot be merged down to Max Outputs. */
-    const char kOverBudgetMessage[] = "Spatial Clustering needs more outputs than Max Outputs allows because the remaining inputs cannot be merged (passthrough inputs, excluded inputs or different custom metadata).";
+    /** @brief Message posted when the inputs that are left cannot be merged down to the Object Limit. */
+    const char kOverBudgetMessage[] = "Spatial Clustering needs more outputs than the Object Limit allows because the remaining inputs cannot be merged (passthrough inputs, excluded inputs or different custom metadata).";
 
     /** @brief Returns a value limited to a range. */
     template <typename T>
@@ -237,7 +237,7 @@ SpatialClusteringFX::SpatialClusteringFX()
     , m_pPriorityService(nullptr)
     , m_pHashTableService(nullptr)
     , m_bEngineInitialized(false)
-    , m_fSpreadFromSize(1.f)
+    , m_fClusterSpread(1.f)
     , m_uSampleRate(0)
     , m_uParamsMaxFrames(0)
     , m_uMessageInterval(1)
@@ -457,16 +457,16 @@ void SpatialClusteringFX::UpdateClusterParams(AkUInt16 in_uMaxFrames)
     const AkReal32 fFrameSeconds = fFrameLength / fSampleRate;
 
     // The leave ratio (1.5) and loudness weighting (on) keep the ClusterEngine defaults.
-    m_clusterParams.joinAngle = Clamp(rtpc.joinAngle, 0.f, PARAM_JOIN_ANGLE_MAX);
-    m_clusterParams.dwellFrames = MillisecondsToFrames(Clamp(rtpc.dwellTime, 0.f, PARAM_DWELL_TIME_MAX), fFrameSeconds);
+    m_clusterParams.joinAngle = Clamp(rtpc.clusterWidth, 0.f, PARAM_CLUSTER_WIDTH_MAX);
+    m_clusterParams.dwellFrames = MillisecondsToFrames(Clamp(rtpc.holdTime, 0.f, PARAM_HOLD_TIME_MAX), fFrameSeconds);
     const AkUInt32 uCrossfadeFrames = MillisecondsToFrames(Clamp(rtpc.crossfadeTime, 0.f, PARAM_CROSSFADE_TIME_MAX), fFrameSeconds);
     m_clusterParams.crossfadeFrames = uCrossfadeFrames > 0 ? uCrossfadeFrames : 1;
-    m_clusterParams.maxOutputs = static_cast<uint32_t>(Clamp(rtpc.maxOutputs, 0, PARAM_MAX_OUTPUTS_MAX));
-    m_clusterParams.nearFieldRadius = Clamp(rtpc.nearFieldRadius, 0.f, PARAM_NEAR_FIELD_RADIUS_MAX);
-    m_clusterParams.distanceWeight = Clamp(rtpc.distanceWeight, 0.f, 1.f);
-    m_clusterParams.excludePriorityAbove = static_cast<uint32_t>(Clamp(rtpc.excludePriorityAbove, 0, PARAM_PRIORITY_MAX));
+    m_clusterParams.maxOutputs = static_cast<uint32_t>(Clamp(rtpc.objectLimit, 0, PARAM_OBJECT_LIMIT_MAX));
+    m_clusterParams.nearFieldRadius = Clamp(rtpc.proximityRadius, 0.f, PARAM_PROXIMITY_RADIUS_MAX);
+    m_clusterParams.distanceWeight = Clamp(rtpc.distanceSensitivity, 0.f, 1.f);
+    m_clusterParams.excludePriorityAbove = static_cast<uint32_t>(Clamp(rtpc.priorityThreshold, 0, PARAM_PRIORITY_MAX));
     m_clusterParams.loudnessSmoothing = std::exp(-fFrameSeconds / kLoudnessTimeConstant);
-    m_fSpreadFromSize = Clamp(rtpc.spreadFromSize, 0.f, 1.f);
+    m_fClusterSpread = Clamp(rtpc.clusterSpread, 0.f, 1.f);
 
     const AkUInt32 uMessageInterval = static_cast<AkUInt32>(kMessageIntervalSeconds / fFrameSeconds);
     m_uMessageInterval = uMessageInterval > 0 ? uMessageInterval : 1;
@@ -791,7 +791,7 @@ void SpatialClusteringFX::ProcessClusters(const AkAudioObjects& in_objects)
             threeD.xform.SetOrientation(
                 AK_DEFAULT_LISTENER_FRONT_X, AK_DEFAULT_LISTENER_FRONT_Y, AK_DEFAULT_LISTENER_FRONT_Z,
                 AK_DEFAULT_TOP_X, AK_DEFAULT_TOP_Y, AK_DEFAULT_TOP_Z);
-            const AkReal32 fSizeSpread = m_fSpreadFromSize * Clamp(info.angularRadius / kFullSpreadRadius, 0.f, 1.f);
+            const AkReal32 fSizeSpread = m_fClusterSpread * Clamp(info.angularRadius / kFullSpreadRadius, 0.f, 1.f);
             threeD.spread = AkMax(pRepresentative->positioning.threeD.spread, fSizeSpread);
         }
 

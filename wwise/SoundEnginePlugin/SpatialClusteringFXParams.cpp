@@ -39,12 +39,12 @@ namespace
     /** @brief Returns true if every real parameter is a finite number. */
     bool AreFinite(const SpatialClusteringRTPCParams& in_params)
     {
-        return std::isfinite(in_params.joinAngle)
-            && std::isfinite(in_params.nearFieldRadius)
-            && std::isfinite(in_params.dwellTime)
+        return std::isfinite(in_params.clusterWidth)
+            && std::isfinite(in_params.proximityRadius)
+            && std::isfinite(in_params.holdTime)
             && std::isfinite(in_params.crossfadeTime)
-            && std::isfinite(in_params.distanceWeight)
-            && std::isfinite(in_params.spreadFromSize);
+            && std::isfinite(in_params.distanceSensitivity)
+            && std::isfinite(in_params.clusterSpread);
     }
 
     /** @brief Reads a value sent as a float and returns false if it is missing or not finite. */
@@ -120,14 +120,14 @@ AKRESULT SpatialClusteringFXParams::SetParamsBlock(const void* in_pParamsBlock, 
     AkUInt8* pParamsBlock = (AkUInt8*)in_pParamsBlock;
 
     SpatialClusteringRTPCParams rtpc;
-    rtpc.joinAngle = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
-    rtpc.maxOutputs = READBANKDATA(AkInt32, pParamsBlock, in_ulBlockSize);
-    rtpc.excludePriorityAbove = READBANKDATA(AkInt32, pParamsBlock, in_ulBlockSize);
-    rtpc.nearFieldRadius = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
-    rtpc.dwellTime = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
+    rtpc.clusterWidth = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
+    rtpc.objectLimit = READBANKDATA(AkInt32, pParamsBlock, in_ulBlockSize);
+    rtpc.priorityThreshold = READBANKDATA(AkInt32, pParamsBlock, in_ulBlockSize);
+    rtpc.proximityRadius = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
+    rtpc.holdTime = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
     rtpc.crossfadeTime = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
-    rtpc.distanceWeight = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
-    rtpc.spreadFromSize = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
+    rtpc.distanceSensitivity = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
+    rtpc.clusterSpread = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
     CHECKBANKDATASIZE(in_ulBlockSize, eResult);
 
     if (!AreFinite(rtpc))
@@ -146,45 +146,45 @@ AKRESULT SpatialClusteringFXParams::SetParam(AkPluginParamID in_paramID, const v
     // Handle parameter change here
     switch (in_paramID)
     {
-    case PARAM_JOIN_ANGLE_ID:
+    case PARAM_CLUSTER_WIDTH_ID:
         if (!ReadReal(in_pValue, in_ulParamSize, value))
             return AK_InvalidParameter;
-        RTPC.joinAngle = value;
+        RTPC.clusterWidth = value;
         break;
-    case PARAM_DWELL_TIME_ID:
+    case PARAM_HOLD_TIME_ID:
         if (!ReadReal(in_pValue, in_ulParamSize, value))
             return AK_InvalidParameter;
-        RTPC.dwellTime = value;
+        RTPC.holdTime = value;
         break;
     case PARAM_CROSSFADE_TIME_ID:
         if (!ReadReal(in_pValue, in_ulParamSize, value))
             return AK_InvalidParameter;
         RTPC.crossfadeTime = value;
         break;
-    case PARAM_MAX_OUTPUTS_ID:
+    case PARAM_OBJECT_LIMIT_ID:
         if (!ReadReal(in_pValue, in_ulParamSize, value))
             return AK_InvalidParameter;
-        RTPC.maxOutputs = RoundToRange(value, static_cast<AkReal32>(PARAM_MAX_OUTPUTS_MAX));
+        RTPC.objectLimit = RoundToRange(value, static_cast<AkReal32>(PARAM_OBJECT_LIMIT_MAX));
         break;
-    case PARAM_NEAR_FIELD_RADIUS_ID:
+    case PARAM_PROXIMITY_RADIUS_ID:
         if (!ReadReal(in_pValue, in_ulParamSize, value))
             return AK_InvalidParameter;
-        RTPC.nearFieldRadius = value;
+        RTPC.proximityRadius = value;
         break;
-    case PARAM_DISTANCE_WEIGHT_ID:
+    case PARAM_DISTANCE_SENSITIVITY_ID:
         if (!ReadReal(in_pValue, in_ulParamSize, value))
             return AK_InvalidParameter;
-        RTPC.distanceWeight = value;
+        RTPC.distanceSensitivity = value;
         break;
-    case PARAM_EXCLUDE_PRIORITY_ABOVE_ID:
+    case PARAM_PRIORITY_THRESHOLD_ID:
         if (!ReadReal(in_pValue, in_ulParamSize, value))
             return AK_InvalidParameter;
-        RTPC.excludePriorityAbove = RoundToRange(value, static_cast<AkReal32>(PARAM_PRIORITY_MAX));
+        RTPC.priorityThreshold = RoundToRange(value, static_cast<AkReal32>(PARAM_PRIORITY_MAX));
         break;
-    case PARAM_SPREAD_FROM_SIZE_ID:
+    case PARAM_CLUSTER_SPREAD_ID:
         if (!ReadReal(in_pValue, in_ulParamSize, value))
             return AK_InvalidParameter;
-        RTPC.spreadFromSize = value;
+        RTPC.clusterSpread = value;
         break;
     default:
         return AK_InvalidParameter;
