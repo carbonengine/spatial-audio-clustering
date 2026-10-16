@@ -6,8 +6,8 @@ All parameters can be driven by RTPCs. The Wwise property editor groups them lik
 |---|---|---|---|---|
 | Clustering | Join Angle, degrees | 0 to 180 | 15 | Largest angle between an input and a cluster for the input to join it. 0 turns off merging by angle. |
 | Clustering | Max Outputs | 0 to 512 | 0 | Largest number of outputs, passthrough outputs included. 0 means no limit. |
-| Protection | Exclude Priority Above | 0 to 100 | 100 | Inputs with a priority above this value are never merged. 100 excludes nothing. |
-| Protection | Near-Field Radius, game units | 0 to 1,000,000 | 0 | Inputs closer to the listener than this are never merged. The slider goes to 1000; type larger values. |
+| Exclusions | Exclude Priority Above | 0 to 100 | 100 | Inputs with a priority above this value are never merged. 100 excludes nothing. |
+| Exclusions | Near-Field Radius, game units | 0 to 1,000,000 | 0 | Inputs closer to the listener than this are never merged. The slider goes to 1000; type larger values. |
 | Advanced | Dwell Time, ms | 0 to 5000 | 200 | Time an input must stay outside its cluster before it leaves, and time two clusters must stay close before they merge. |
 | Advanced | Crossfade Time, ms | 0 to 1000 | 50 | Time over which a moving input fades between clusters. |
 | Advanced | Distance Weight | 0 to 1 | 0 | How much a difference in distance counts against the Join Angle. 0 uses the angle only. |

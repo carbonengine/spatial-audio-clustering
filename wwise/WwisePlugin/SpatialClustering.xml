@@ -70,7 +70,7 @@ for the documentation about the plugin xml format
         </Restrictions>
       </Property>
       <!-- Inputs with a playback priority above this value are never merged. -->
-      <Property Name="CCP:excludePriorityAbove" DocId="excludePriorityAbove" Type="int32" SupportRTPCType="Exclusive" DisplayName="Exclude Priority Above" DisplayGroup="Protection">
+      <Property Name="CCP:excludePriorityAbove" DocId="excludePriorityAbove" Type="int32" SupportRTPCType="Exclusive" DisplayName="Exclude Priority Above" DisplayGroup="Exclusions">
         <UserInterface Step="1" Fine="1" Decimals="0" />
         <DefaultValue>100</DefaultValue>
         <AudioEnginePropertyID>2</AudioEnginePropertyID>
@@ -84,7 +84,7 @@ for the documentation about the plugin xml format
         </Restrictions>
       </Property>
       <!-- Inputs closer to the listener than this distance are never merged. -->
-      <Property Name="CCP:nearFieldRadius" DocId="nearFieldRadius" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Near-Field Radius (game units)" DisplayGroup="Protection">
+      <Property Name="CCP:nearFieldRadius" DocId="nearFieldRadius" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Near-Field Radius (game units)" DisplayGroup="Exclusions">
         <UserInterface Step="1" Fine="0.1" Decimals="1" UIMax="1000" />
         <DefaultValue>0</DefaultValue>
         <AudioEnginePropertyID>3</AudioEnginePropertyID>
