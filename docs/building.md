@@ -45,6 +45,14 @@ The root `CMakeLists.txt` builds the runtime plug-in as a static library and ins
 
 The library has no debug suffix, so install Debug and Release builds to separate prefixes.
 
+With `-DSPATIALCLUSTERING_BUILD_SHARED=ON` it also builds the runtime plug-in as `SpatialClustering.dll` for dynamic loading, and the `SharedRuntime` install component installs it with its PDB. Build Release for the Release sound engine and RelWithDebInfo for the Profile sound engine, since only Release defines `AK_OPTIMIZED`, and install each to its own prefix:
+
+```
+cmake -S . -B build/shared -G "Visual Studio 18 2026" -A x64 -DSPATIALCLUSTERING_BUILD_SHARED=ON -DWWISE_SDK_DIR=<Wwise SDK folder>
+cmake --build build/shared --config Release --target SpatialClusteringShared
+cmake --install build/shared --config Release --component SharedRuntime --prefix <release folder>
+```
+
 A game can also add the repository to its own build with `add_subdirectory`, for example as a git subtree, and link `SpatialClustering::SpatialClusteringFX`. The plug-in then builds with the game's configurations and its `Wwise::Wwise` target, and generates no install rules unless `SPATIALCLUSTERING_INSTALL` is on.
 
 With `-DSPATIALCLUSTERING_BUILD_AUTHORING=ON` it also builds the authoring plug-in, on Windows only. The `Authoring` install component copies it into a Wwise install with the same layout as the Launcher, which is useful for a Wwise install kept in source control: the plug-in is built against that install's exact SDK. Use the vc170 toolset, `-T v143`, because Wwise Authoring ships the Visual Studio 2022 runtime. The Visual Studio 2026 generator needs CMake 4.2 or later, such as the one that comes with Visual Studio 2026.

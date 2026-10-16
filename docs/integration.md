@@ -3,7 +3,7 @@
 The runtime plug-in must come from the same Wwise version as your game, since the sound engine rejects plug-ins built for another version. Installing the bundle puts the runtime files in your Wwise install's `SDK` folder.
 
 - **Static linking**: link `SpatialClusteringFX.lib` from `SDK\x64_vc180\<Config>\lib` and include `<AK/Plugin/SpatialClusteringFXFactory.h>` in one source file.
-- **Dynamic loading**: ship `SpatialClustering.dll` from `SDK\x64_vc180\<Config>\bin` next to the executable, or in the folder set in `AkInitSettings::szPluginDLLPath`.
+- **Dynamic loading**: ship `SpatialClustering.dll` from `SDK\x64_vc180\<Config>\bin` next to the executable, or in the folder set in `AkInitSettings::szPluginDLLPath`. The sound engine loads it when the Init SoundBank lists the plug-in and the game does not link it statically, so the game needs no code change. To build the DLL against your game's exact SDK, see [Build with CMake](building.md#build-with-cmake).
 - **CMake**: build the plug-in from source with your game, see [Build with CMake](building.md#build-with-cmake). Link `SpatialClustering::SpatialClusteringFX`, from `find_package(SpatialClustering CONFIG)` or from `add_subdirectory` on this repository, and include `<AK/Plugin/SpatialClusteringFXFactory.h>` in one source file.
 - **Unity and Unreal**: add the plug-in to your project's Wwise integration the way Audiokinetic describes for plug-ins, using the same files.
 

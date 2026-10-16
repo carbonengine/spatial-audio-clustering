@@ -31,6 +31,7 @@ string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" SPATIALCLUSTERING_VERSION "${SPATI
 project(SpatialClustering VERSION ${SPATIALCLUSTERING_VERSION} LANGUAGES CXX)
 
 option(SPATIALCLUSTERING_BUILD_AUTHORING "Build the Wwise authoring plug-in (Windows only)" OFF)
+option(SPATIALCLUSTERING_BUILD_SHARED "Build the runtime plug-in as a dynamic library that the sound engine loads at run time" OFF)
 
 # A game that adds the plug-in with add_subdirectory links it into its own binaries, so by
 # default only a standalone build installs it.
@@ -108,6 +109,41 @@ if(SPATIALCLUSTERING_INSTALL)
             ${CMAKE_CURRENT_BINARY_DIR}/SpatialClusteringConfigVersion.cmake
         DESTINATION ${SPATIALCLUSTERING_CONFIG_DIR}
         COMPONENT Runtime)
+endif()
+
+# Runtime plug-in as a dynamic library. The sound engine loads it from next to the executable,
+# or from AkInitSettings::szPluginDLLPath, when a SoundBank needs it and it is not linked in.
+# Release builds it for the Release sound engine and RelWithDebInfo for the Profile one.
+if(SPATIALCLUSTERING_BUILD_SHARED)
+    add_library(SpatialClusteringShared SHARED
+        wwise/SoundEnginePlugin/SpatialClusteringFXShared.cpp
+        wwise/SoundEnginePlugin/SpatialClusteringFXFactory.h)
+    set_target_properties(SpatialClusteringShared PROPERTIES OUTPUT_NAME SpatialClustering)
+    target_link_libraries(SpatialClusteringShared PRIVATE SpatialClusteringFX Wwise::Wwise)
+    target_compile_features(SpatialClusteringShared PRIVATE cxx_std_17)
+    if(MSVC)
+        target_compile_options(SpatialClusteringFX PRIVATE /Z7)
+        target_compile_options(SpatialClusteringShared PRIVATE /utf-8 /Z7)
+        target_link_options(SpatialClusteringShared PRIVATE /DEBUG /INCREMENTAL:NO /OPT:REF /OPT:ICF)
+    endif()
+
+    if(SPATIALCLUSTERING_INSTALL)
+        # The library only, without the import library that nothing links against.
+        if(WIN32)
+            set(SPATIALCLUSTERING_SHARED_DIR ${CMAKE_INSTALL_BINDIR})
+        else()
+            set(SPATIALCLUSTERING_SHARED_DIR ${CMAKE_INSTALL_LIBDIR})
+        endif()
+        install(FILES $<TARGET_FILE:SpatialClusteringShared>
+            DESTINATION ${SPATIALCLUSTERING_SHARED_DIR}
+            COMPONENT SharedRuntime)
+        if(MSVC)
+            install(FILES $<TARGET_PDB_FILE:SpatialClusteringShared>
+                DESTINATION ${SPATIALCLUSTERING_SHARED_DIR}
+                COMPONENT SharedRuntime
+                OPTIONAL)
+        endif()
+    endif()
 endif()
 
 # Authoring plug-in. Install it into a Wwise install, or a copy of one, with
