@@ -11,7 +11,6 @@ We welcome contributions: feature requests, bug fixes, documentation improvement
 ## Submitting a pull request
 
 - Fork the repository and create a feature branch.
-- Run the tests in `core/tests`, and include benchmark results if you change `ClusterEngine`.
 - Build and test your changes at runtime before submitting.
 - Submit a PR with a clear description of what changed and why.
 
@@ -19,14 +18,13 @@ Contributions are accepted under the [Apache License 2.0](LICENSE.txt), the lice
 
 ## Building and testing your changes
 
-[Building from Source](README.md#building-from-source) in the README covers the toolchain, the plug-in build, the test program and ways to try the plug-in in a game. Changes to the clustering itself can be tested first with the test program in `core/tests`, which does not need the Wwise SDK.
+[Building from Source](README.md#building-from-source) in the README covers the toolchain, the plug-in build and ways to try the plug-in in a game.
 
 ## Where things are
 
 | Path | Contents |
 |---|---|
 | `core/src/ClusterEngine.h/.cpp` | The clustering. Plain C++17 with no Wwise headers; all memory goes through a `ClusterAllocator`. |
-| `core/tests/` | Standalone tests, scenarios and benchmark for the engine. Not part of the plug-in build. |
 | `wwise/` | The Wwise plug-in project. Run `wp.py` from this folder. |
 | `wwise/SoundEnginePlugin/SpatialClusteringFX.h/.cpp` | The Wwise object processor: reads the input objects, runs the engine, creates and updates output objects and mixes the inputs into them with gain ramps. |
 | `wwise/SoundEnginePlugin/SpatialClusteringFXParams.h/.cpp` | Parameters, read from banks and RTPCs. |
