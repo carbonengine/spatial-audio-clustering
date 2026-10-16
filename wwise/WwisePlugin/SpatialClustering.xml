@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+The content of this file includes portions of the AUDIOKINETIC Wwise Technology
+released in source code form as part of the SDK installer package.
+
+Commercial License Usage
+
+Licensees holding valid commercial licenses to the AUDIOKINETIC Wwise Technology
+may use this file in accordance with the end user license agreement provided
+with the software or, alternatively, in accordance with the terms contained in a
+written agreement between you and Audiokinetic Inc.
+
+Apache License Usage
+
+Alternatively, this file may be used under the Apache License, Version 2.0 (the
+"Apache License"); you may not use this file except in compliance with the
+Apache License. You may obtain a copy of the Apache License at
+http://www.apache.org/licenses/LICENSE-2.0.
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the Apache License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES
+OR CONDITIONS OF ANY KIND, either express or implied. See the Apache License for
+the specific language governing permissions and limitations under the License.
+
+  Copyright (c) 2023 Audiokinetic Inc.
+-->
+<!--
+See https://www.audiokinetic.com/library/edge/?source=SDK&id=plugin__xml.html
+for the documentation about the plugin xml format
+-->
+<PluginModule>
+  <EffectPlugin Name="Spatial Clustering" CompanyID="64" PluginID="6973">
+    <PluginInfo>
+      <PlatformSupport>
+        <Platform Name="Any">
+          <CanBeInsertOnBusses>true</CanBeInsertOnBusses>
+          <CanBeInsertOnAudioObjects>false</CanBeInsertOnAudioObjects>
+          <CanBeRendered>false</CanBeRendered>
+        </Platform>
+      </PlatformSupport>
+    </PluginInfo>
+    <Properties>
+      <!-- Add your property definitions here -->
+      <!-- Largest angle from the listener between an input and a cluster for the input to join the cluster. -->
+      <Property Name="CCP:clusterWidth" DocId="clusterWidth" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Cluster Width (degrees)" DisplayGroup="Clustering">
+        <UserInterface Step="0.5" Fine="0.1" Decimals="1" />
+        <DefaultValue>15</DefaultValue>
+        <AudioEnginePropertyID>0</AudioEnginePropertyID>
+        <Restrictions>
+          <ValueRestriction>
+            <Range Type="Real32">
+              <Min>0</Min>
+              <Max>180</Max>
+            </Range>
+          </ValueRestriction>
+        </Restrictions>
+      </Property>
+      <!-- Largest number of output objects, passthrough inputs included, where 0 means no limit. -->
+      <Property Name="CCP:objectLimit" DocId="objectLimit" Type="int32" SupportRTPCType="Exclusive" DisplayName="Object Limit (0 = no limit)" DisplayGroup="Clustering">
+        <UserInterface Step="1" Fine="1" Decimals="0" />
+        <DefaultValue>0</DefaultValue>
+        <AudioEnginePropertyID>1</AudioEnginePropertyID>
+        <Restrictions>
+          <ValueRestriction>
+            <Range Type="int32">
+              <Min>0</Min>
+              <Max>512</Max>
+            </Range>
+          </ValueRestriction>
+        </Restrictions>
+      </Property>
+      <!-- Inputs with a playback priority above this value are never merged. -->
+      <Property Name="CCP:priorityThreshold" DocId="priorityThreshold" Type="int32" SupportRTPCType="Exclusive" DisplayName="Priority Threshold" DisplayGroup="Exclusions">
+        <UserInterface Step="1" Fine="1" Decimals="0" />
+        <DefaultValue>100</DefaultValue>
+        <AudioEnginePropertyID>2</AudioEnginePropertyID>
+        <Restrictions>
+          <ValueRestriction>
+            <Range Type="int32">
+              <Min>0</Min>
+              <Max>100</Max>
+            </Range>
+          </ValueRestriction>
+        </Restrictions>
+      </Property>
+      <!-- Inputs closer to the listener than this distance are never merged. -->
+      <Property Name="CCP:proximityRadius" DocId="proximityRadius" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Proximity Radius (game units)" DisplayGroup="Exclusions">
+        <UserInterface Step="1" Fine="0.1" Decimals="1" UIMax="1000" />
+        <DefaultValue>0</DefaultValue>
+        <AudioEnginePropertyID>3</AudioEnginePropertyID>
+        <Restrictions>
+          <ValueRestriction>
+            <Range Type="Real32">
+              <Min>0</Min>
+              <Max>1000000</Max>
+            </Range>
+          </ValueRestriction>
+        </Restrictions>
+      </Property>
+      <!-- Time a change must last before an input leaves its cluster or two clusters merge. -->
+      <Property Name="CCP:holdTime" DocId="holdTime" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Hold Time (ms)" DisplayGroup="Advanced">
+        <UserInterface Step="10" Fine="1" Decimals="0" />
+        <DefaultValue>200</DefaultValue>
+        <AudioEnginePropertyID>4</AudioEnginePropertyID>
+        <Restrictions>
+          <ValueRestriction>
+            <Range Type="Real32">
+              <Min>0</Min>
+              <Max>5000</Max>
+            </Range>
+          </ValueRestriction>
+        </Restrictions>
+      </Property>
+      <!-- Time over which an input fades from one cluster to another. -->
+      <Property Name="CCP:crossfadeTime" DocId="crossfadeTime" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Crossfade Time (ms)" DisplayGroup="Advanced">
+        <UserInterface Step="5" Fine="1" Decimals="0" />
+        <DefaultValue>50</DefaultValue>
+        <AudioEnginePropertyID>5</AudioEnginePropertyID>
+        <Restrictions>
+          <ValueRestriction>
+            <Range Type="Real32">
+              <Min>0</Min>
+              <Max>1000</Max>
+            </Range>
+          </ValueRestriction>
+        </Restrictions>
+      </Property>
+      <!-- How much a difference in distance counts against the cluster width, where 0 uses the angle only. -->
+      <Property Name="CCP:distanceSensitivity" DocId="distanceSensitivity" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Distance Sensitivity" DisplayGroup="Advanced">
+        <UserInterface Step="0.05" Fine="0.01" Decimals="2" />
+        <DefaultValue>0</DefaultValue>
+        <AudioEnginePropertyID>6</AudioEnginePropertyID>
+        <Restrictions>
+          <ValueRestriction>
+            <Range Type="Real32">
+              <Min>0</Min>
+              <Max>1</Max>
+            </Range>
+          </ValueRestriction>
+        </Restrictions>
+      </Property>
+      <!-- Share of the cluster's angular size used as its minimum spread. -->
+      <Property Name="CCP:clusterSpread" DocId="clusterSpread" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Cluster Spread" DisplayGroup="Advanced">
+        <UserInterface Step="0.05" Fine="0.01" Decimals="2" />
+        <DefaultValue>1</DefaultValue>
+        <AudioEnginePropertyID>7</AudioEnginePropertyID>
+        <Restrictions>
+          <ValueRestriction>
+            <Range Type="Real32">
+              <Min>0</Min>
+              <Max>1</Max>
+            </Range>
+          </ValueRestriction>
+        </Restrictions>
+      </Property>
+    </Properties>
+  </EffectPlugin>
+</PluginModule>

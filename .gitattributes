@@ -1,0 +1,6 @@
+# Store text files with LF line endings and let git pick the checkout line endings.
+* text=auto
+
+*.png binary
+*.jpg binary
+*.gif binary
