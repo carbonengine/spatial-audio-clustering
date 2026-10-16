@@ -14,7 +14,7 @@
     "description": "Merges audio objects that reach the listener from similar directions into fewer outputs, to save system audio objects. Insert it as an Effect on an Audio Objects bus.",
 
     // Vendor name displayed in the Wwise Launcher for this bundle
-    "vendor": "CCP Games",
+    "vendor": "Fenris Creations",
 
     // Base64 representation of an image to be displayed in the Wwise Launcher for this bundle (PNG, JPEG or GIF)
     "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
