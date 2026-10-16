@@ -29,7 +29,7 @@ Most spatial audio endpoints (Dolby, Sonic, DTS) offer up to 128 concurrent spat
 We developed this plugin to mix nearby sources into a single output positioned at their average direction. Human spatial resolution is limited at small angular separations, so a listener can't really tell several close sources apart from one source at the average position. The freed audio object slots then become available for sounds elsewhere in the scene.
 
 ### Results
-The plugin ships as part of the EVE Online and EVE Frontier audio engine. In intense battles we measured up to 60% reduction in audio thread CPU usage.
+The plugin ships as part of the EVE Online and EVE Frontier audio engine. In intense battles we measured up to 60% reduction in audio thread CPU usage. In an EVE Frontier test with 10 ships firing at the player, the scene used all 128 system audio objects without the plug-in, and 10 to 11 clusters with the default settings.
 
 ## In-Game Impact
 
@@ -47,6 +47,7 @@ Scene with 20 ships firing at the player:
 Same scene with plugin enabled:
 - System audio object consumption is drastically reduced (20-24 objects)
 - Clear, distinct spatial positioning for each cluster
+- More accurate positioning overall: without the plug-in, objects over the endpoint's budget are mixed into the bed and lose their exact position. With it, every cluster is a system audio object at its own position. A crowded scene can sound less wide than without the plug-in, because the overflow no longer smears into the bed, but each sound is placed more precisely.
 - More resources for sound designers to add unique locations of spatialized objects
 
 ## Install
@@ -105,8 +106,8 @@ Inputs at the listener position (closer than 0.0001 game units), such as sounds 
 ### Joining and leaving
 
 - A new input joins the nearest cluster within the **Join Angle**. If there is none, it starts a new cluster.
-- When the **Max Outputs** limit is reached, a new input with no cluster within the **Join Angle** joins the nearest cluster within **Join Angle** × **Leave Ratio**. If there is none either, it still starts a new cluster, and the output budget merges the closest pair of clusters in the same frame.
-- An input leaves its cluster only after it has been farther than **Join Angle** × **Leave Ratio** from the cluster for the **Dwell Time**. The gap between the two angles and the waiting time stop inputs from switching back and forth.
+- When the **Max Outputs** limit is reached, a new input with no cluster within the **Join Angle** joins the nearest cluster within 1.5 × the **Join Angle**. If there is none either, it still starts a new cluster, and the output budget merges the closest pair of clusters in the same frame.
+- An input leaves its cluster only after it has been farther than 1.5 × the **Join Angle** from the cluster for the **Dwell Time**. The gap between the two angles and the waiting time stop inputs from switching back and forth.
 - A leaving input joins another cluster within the **Join Angle**, or starts its own cluster. While the **Max Outputs** limit is reached and no other cluster is within the **Join Angle**, it stays in its cluster.
 - An input whose custom metadata plug-in types change leaves its cluster right away, with a crossfade, unless it is the only input in the cluster.
 - A cluster with a single input follows that input and never loses it.
@@ -119,21 +120,21 @@ A switch between clustered and passthrough, for example when an RTPC moves Speak
 
 ### Merging
 
-Two clusters that stay within the **Join Angle** of each other for the **Dwell Time** merge. The lighter cluster fades into the other one; with **Loudness Weighting** on, the lighter cluster is the quieter one, otherwise it is the one with fewer inputs. A merge only happens if the merged cluster would still fit within the **Join Angle**.
+Two clusters that stay within the **Join Angle** of each other for the **Dwell Time** merge. The quieter cluster fades into the louder one. A merge only happens if the merged cluster would still fit within the **Join Angle**.
 
 ### Output budget
 
 With **Max Outputs** above 0, the plug-in counts clusters plus passthrough outputs. When the count is over the limit, it merges the closest pairs of clusters right away, without waiting for the dwell time. A higher priority makes a pair count as farther apart, so it merges later.
 
-- At the limit, a new input that is farther than **Join Angle** × **Leave Ratio** from every cluster gets a cluster of its own, and the closest pair of clusters merges instead. A sound far from all others is therefore not pulled into a distant cluster.
+- At the limit, a new input that is farther than 1.5 × the **Join Angle** from every cluster gets a cluster of its own, and the closest pair of clusters merges instead. A sound far from all others is therefore not pulled into a distant cluster.
 - Passthrough inputs, excluded inputs and clusters with different custom metadata cannot be merged. If the limit cannot be reached, the plug-in posts a message to the Capture Log.
 - A cluster that has been merged keeps its output until its crossfade ends, so the number of outputs can be above the limit for the length of a crossfade.
 
 ### Cluster outputs
 
-- **Position**: the average direction of the contributing inputs, at their average distance. With **Loudness Weighting** on, each input counts by its RMS level, smoothed over about 50 ms.
+- **Position**: the average direction of the contributing inputs, at their average distance. Each input counts by its RMS level, smoothed over about 50 ms, so a cluster sits closer to its louder inputs.
 - **One contributing input**: the output copies the input's positioning.
-- **Several contributing inputs (including inputs fading in or out)**: the output uses Position spatialization at the cluster position with the default orientation. Its spread is the larger of the spread of the representative input (the loudest one when **Loudness Weighting** is on, otherwise the first input at full gain) and **Spread From Cluster Size** × (cluster angular radius / 180°).
+- **Several contributing inputs (including inputs fading in or out)**: the output uses Position spatialization at the cluster position with the default orientation. Its spread is the larger of the spread of the representative input (the loudest one) and **Spread From Cluster Size** × (cluster angular radius / 180°).
 - **Priority**: the highest priority among the contributing inputs.
 - **Custom metadata**: copied from the representative input.
 - **Name**: cluster outputs appear as `Cluster <id>` in the profiler. Passthrough outputs are named `Passthrough`, or keep the name an upstream object processor gave their input.
@@ -148,20 +149,18 @@ Memory comes from the Wwise plug-in allocator. It is reserved for 64 inputs in I
 
 ## Parameters
 
-All parameters except Loudness Weighting can be driven by RTPCs. The same descriptions are in the help panel of the Wwise property editor.
+All parameters can be driven by RTPCs. The Wwise property editor groups them like the table below, and its help panel has the same descriptions. Most scenes only need **Join Angle**, and **Max Outputs** when you have a fixed object budget.
 
-| Parameter | Range | Default | Description |
-|---|---|---|---|
-| Join Angle (degrees) | 0 to 180 | 15 | Largest angle between an input and a cluster for the input to join it. 0 turns off merging by angle. |
-| Leave Ratio (x Join Angle) | 1 to 4 | 1.5 | Angle at which an input starts to leave its cluster, as a multiple of the Join Angle. |
-| Dwell Time (ms) | 0 to 5000 | 200 | Time an input must stay outside its cluster before it leaves, and time two clusters must stay close before they merge. |
-| Crossfade Time (ms) | 0 to 1000 | 50 | Time over which a moving input fades between clusters. |
-| Max Outputs (0 = no limit) | 0 to 512 | 0 | Largest number of outputs, passthrough outputs included. 0 means no limit. |
-| Near-Field Radius (game units) | 0 to 1,000,000 | 0 | Inputs closer to the listener than this are never merged. The slider goes to 1000; type larger values. |
-| Distance Weight | 0 to 1 | 0 | How much a difference in distance counts against the Join Angle. 0 uses the angle only. |
-| Exclude Priority Above | 0 to 100 | 100 | Inputs with a priority above this value are never merged. 100 excludes nothing. |
-| Spread From Cluster Size | 0 to 1 | 1 | Share of the cluster's angular size used as its minimum spread. |
-| Loudness Weighting | on or off | on | Moves each cluster toward its louder inputs. |
+| Group | Parameter | Range | Default | Description |
+|---|---|---|---|---|
+| Clustering | Join Angle (degrees) | 0 to 180 | 15 | Largest angle between an input and a cluster for the input to join it. 0 turns off merging by angle. |
+| Clustering | Max Outputs (0 = no limit) | 0 to 512 | 0 | Largest number of outputs, passthrough outputs included. 0 means no limit. |
+| Protection | Exclude Priority Above | 0 to 100 | 100 | Inputs with a priority above this value are never merged. 100 excludes nothing. |
+| Protection | Near-Field Radius (game units) | 0 to 1,000,000 | 0 | Inputs closer to the listener than this are never merged. The slider goes to 1000; type larger values. |
+| Advanced | Dwell Time (ms) | 0 to 5000 | 200 | Time an input must stay outside its cluster before it leaves, and time two clusters must stay close before they merge. |
+| Advanced | Crossfade Time (ms) | 0 to 1000 | 50 | Time over which a moving input fades between clusters. |
+| Advanced | Distance Weight | 0 to 1 | 0 | How much a difference in distance counts against the Join Angle. 0 uses the angle only. |
+| Advanced | Spread From Cluster Size | 0 to 1 | 1 | Share of the cluster's angular size used as its minimum spread. |
 
 Dwell Time and Crossfade Time are rounded to whole audio frames. At 48 kHz with 1024-sample buffers, one frame is about 21 ms. A crossfade always lasts at least one frame.
 

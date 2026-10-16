@@ -42,7 +42,7 @@ for the documentation about the plugin xml format
     <Properties>
       <!-- Add your property definitions here -->
       <!-- Largest angle from the listener between an input and a cluster for the input to join the cluster. -->
-      <Property Name="CCP:joinAngle" DocId="joinAngle" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Join Angle (degrees)">
+      <Property Name="CCP:joinAngle" DocId="joinAngle" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Join Angle (degrees)" DisplayGroup="Clustering">
         <UserInterface Step="0.5" Fine="0.1" Decimals="1" />
         <DefaultValue>15</DefaultValue>
         <AudioEnginePropertyID>0</AudioEnginePropertyID>
@@ -55,25 +55,53 @@ for the documentation about the plugin xml format
           </ValueRestriction>
         </Restrictions>
       </Property>
-      <!-- Angle at which an input leaves its cluster, as a multiple of the join angle. -->
-      <Property Name="CCP:leaveRatio" DocId="leaveRatio" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Leave Ratio (x Join Angle)">
-        <UserInterface Step="0.1" Fine="0.01" Decimals="2" />
-        <DefaultValue>1.5</DefaultValue>
+      <!-- Largest number of output objects, passthrough inputs included, where 0 means no limit. -->
+      <Property Name="CCP:maxOutputs" DocId="maxOutputs" Type="int32" SupportRTPCType="Exclusive" DisplayName="Max Outputs (0 = no limit)" DisplayGroup="Clustering">
+        <UserInterface Step="1" Fine="1" Decimals="0" />
+        <DefaultValue>0</DefaultValue>
         <AudioEnginePropertyID>1</AudioEnginePropertyID>
         <Restrictions>
           <ValueRestriction>
+            <Range Type="int32">
+              <Min>0</Min>
+              <Max>512</Max>
+            </Range>
+          </ValueRestriction>
+        </Restrictions>
+      </Property>
+      <!-- Inputs with a playback priority above this value are never merged. -->
+      <Property Name="CCP:excludePriorityAbove" DocId="excludePriorityAbove" Type="int32" SupportRTPCType="Exclusive" DisplayName="Exclude Priority Above" DisplayGroup="Protection">
+        <UserInterface Step="1" Fine="1" Decimals="0" />
+        <DefaultValue>100</DefaultValue>
+        <AudioEnginePropertyID>2</AudioEnginePropertyID>
+        <Restrictions>
+          <ValueRestriction>
+            <Range Type="int32">
+              <Min>0</Min>
+              <Max>100</Max>
+            </Range>
+          </ValueRestriction>
+        </Restrictions>
+      </Property>
+      <!-- Inputs closer to the listener than this distance are never merged. -->
+      <Property Name="CCP:nearFieldRadius" DocId="nearFieldRadius" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Near-Field Radius (game units)" DisplayGroup="Protection">
+        <UserInterface Step="1" Fine="0.1" Decimals="1" UIMax="1000" />
+        <DefaultValue>0</DefaultValue>
+        <AudioEnginePropertyID>3</AudioEnginePropertyID>
+        <Restrictions>
+          <ValueRestriction>
             <Range Type="Real32">
-              <Min>1</Min>
-              <Max>4</Max>
+              <Min>0</Min>
+              <Max>1000000</Max>
             </Range>
           </ValueRestriction>
         </Restrictions>
       </Property>
       <!-- Time a change must last before an input leaves its cluster or two clusters merge. -->
-      <Property Name="CCP:dwellTime" DocId="dwellTime" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Dwell Time (ms)">
+      <Property Name="CCP:dwellTime" DocId="dwellTime" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Dwell Time (ms)" DisplayGroup="Advanced">
         <UserInterface Step="10" Fine="1" Decimals="0" />
         <DefaultValue>200</DefaultValue>
-        <AudioEnginePropertyID>2</AudioEnginePropertyID>
+        <AudioEnginePropertyID>4</AudioEnginePropertyID>
         <Restrictions>
           <ValueRestriction>
             <Range Type="Real32">
@@ -84,10 +112,10 @@ for the documentation about the plugin xml format
         </Restrictions>
       </Property>
       <!-- Time over which an input fades from one cluster to another. -->
-      <Property Name="CCP:crossfadeTime" DocId="crossfadeTime" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Crossfade Time (ms)">
+      <Property Name="CCP:crossfadeTime" DocId="crossfadeTime" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Crossfade Time (ms)" DisplayGroup="Advanced">
         <UserInterface Step="5" Fine="1" Decimals="0" />
         <DefaultValue>50</DefaultValue>
-        <AudioEnginePropertyID>3</AudioEnginePropertyID>
+        <AudioEnginePropertyID>5</AudioEnginePropertyID>
         <Restrictions>
           <ValueRestriction>
             <Range Type="Real32">
@@ -97,36 +125,8 @@ for the documentation about the plugin xml format
           </ValueRestriction>
         </Restrictions>
       </Property>
-      <!-- Largest number of output objects, passthrough inputs included, where 0 means no limit. -->
-      <Property Name="CCP:maxOutputs" DocId="maxOutputs" Type="int32" SupportRTPCType="Exclusive" DisplayName="Max Outputs (0 = no limit)">
-        <UserInterface Step="1" Fine="1" Decimals="0" />
-        <DefaultValue>0</DefaultValue>
-        <AudioEnginePropertyID>4</AudioEnginePropertyID>
-        <Restrictions>
-          <ValueRestriction>
-            <Range Type="int32">
-              <Min>0</Min>
-              <Max>512</Max>
-            </Range>
-          </ValueRestriction>
-        </Restrictions>
-      </Property>
-      <!-- Inputs closer to the listener than this distance are never merged. -->
-      <Property Name="CCP:nearFieldRadius" DocId="nearFieldRadius" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Near-Field Radius (game units)">
-        <UserInterface Step="1" Fine="0.1" Decimals="1" UIMax="1000" />
-        <DefaultValue>0</DefaultValue>
-        <AudioEnginePropertyID>5</AudioEnginePropertyID>
-        <Restrictions>
-          <ValueRestriction>
-            <Range Type="Real32">
-              <Min>0</Min>
-              <Max>1000000</Max>
-            </Range>
-          </ValueRestriction>
-        </Restrictions>
-      </Property>
       <!-- How much a difference in distance counts against the join angle, where 0 uses the angle only. -->
-      <Property Name="CCP:distanceWeight" DocId="distanceWeight" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Distance Weight">
+      <Property Name="CCP:distanceWeight" DocId="distanceWeight" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Distance Weight" DisplayGroup="Advanced">
         <UserInterface Step="0.05" Fine="0.01" Decimals="2" />
         <DefaultValue>0</DefaultValue>
         <AudioEnginePropertyID>6</AudioEnginePropertyID>
@@ -139,25 +139,11 @@ for the documentation about the plugin xml format
           </ValueRestriction>
         </Restrictions>
       </Property>
-      <!-- Inputs with a playback priority above this value are never merged. -->
-      <Property Name="CCP:excludePriorityAbove" DocId="excludePriorityAbove" Type="int32" SupportRTPCType="Exclusive" DisplayName="Exclude Priority Above">
-        <UserInterface Step="1" Fine="1" Decimals="0" />
-        <DefaultValue>100</DefaultValue>
-        <AudioEnginePropertyID>7</AudioEnginePropertyID>
-        <Restrictions>
-          <ValueRestriction>
-            <Range Type="int32">
-              <Min>0</Min>
-              <Max>100</Max>
-            </Range>
-          </ValueRestriction>
-        </Restrictions>
-      </Property>
       <!-- Share of the cluster's angular size used as its minimum spread. -->
-      <Property Name="CCP:spreadFromSize" DocId="spreadFromSize" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Spread From Cluster Size">
+      <Property Name="CCP:spreadFromSize" DocId="spreadFromSize" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Spread From Cluster Size" DisplayGroup="Advanced">
         <UserInterface Step="0.05" Fine="0.01" Decimals="2" />
         <DefaultValue>1</DefaultValue>
-        <AudioEnginePropertyID>8</AudioEnginePropertyID>
+        <AudioEnginePropertyID>7</AudioEnginePropertyID>
         <Restrictions>
           <ValueRestriction>
             <Range Type="Real32">
@@ -166,11 +152,6 @@ for the documentation about the plugin xml format
             </Range>
           </ValueRestriction>
         </Restrictions>
-      </Property>
-      <!-- Moves each cluster toward its louder inputs. -->
-      <Property Name="CCP:loudnessWeighting" DocId="loudnessWeighting" Type="bool" DisplayName="Loudness Weighting">
-        <DefaultValue>true</DefaultValue>
-        <AudioEnginePropertyID>9</AudioEnginePropertyID>
       </Property>
     </Properties>
   </EffectPlugin>

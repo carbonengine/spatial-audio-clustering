@@ -456,8 +456,8 @@ void SpatialClusteringFX::UpdateClusterParams(AkUInt16 in_uMaxFrames)
     const AkReal32 fSampleRate = static_cast<AkReal32>(m_uSampleRate > 0 ? m_uSampleRate : 48000);
     const AkReal32 fFrameSeconds = fFrameLength / fSampleRate;
 
+    // The leave ratio (1.5) and loudness weighting (on) keep the ClusterEngine defaults.
     m_clusterParams.joinAngle = Clamp(rtpc.joinAngle, 0.f, PARAM_JOIN_ANGLE_MAX);
-    m_clusterParams.leaveRatio = Clamp(rtpc.leaveRatio, PARAM_LEAVE_RATIO_MIN, PARAM_LEAVE_RATIO_MAX);
     m_clusterParams.dwellFrames = MillisecondsToFrames(Clamp(rtpc.dwellTime, 0.f, PARAM_DWELL_TIME_MAX), fFrameSeconds);
     const AkUInt32 uCrossfadeFrames = MillisecondsToFrames(Clamp(rtpc.crossfadeTime, 0.f, PARAM_CROSSFADE_TIME_MAX), fFrameSeconds);
     m_clusterParams.crossfadeFrames = uCrossfadeFrames > 0 ? uCrossfadeFrames : 1;
@@ -465,7 +465,6 @@ void SpatialClusteringFX::UpdateClusterParams(AkUInt16 in_uMaxFrames)
     m_clusterParams.nearFieldRadius = Clamp(rtpc.nearFieldRadius, 0.f, PARAM_NEAR_FIELD_RADIUS_MAX);
     m_clusterParams.distanceWeight = Clamp(rtpc.distanceWeight, 0.f, 1.f);
     m_clusterParams.excludePriorityAbove = static_cast<uint32_t>(Clamp(rtpc.excludePriorityAbove, 0, PARAM_PRIORITY_MAX));
-    m_clusterParams.loudnessWeighting = m_pParams->NonRTPC.loudnessWeighting;
     m_clusterParams.loudnessSmoothing = std::exp(-fFrameSeconds / kLoudnessTimeConstant);
     m_fSpreadFromSize = Clamp(rtpc.spreadFromSize, 0.f, 1.f);
 
@@ -491,7 +490,6 @@ bool SpatialClusteringFX::PrepareInputs(const AkAudioObjects& in_objects)
             m_inputPriorities[i] = AK_DEFAULT_PRIORITY;
     }
 
-    const bool bLoudnessWeighting = m_clusterParams.loudnessWeighting;
     for (AkUInt32 i = 0; i < uNumInputs; ++i)
     {
         const AkAudioObject& object = *in_objects.ppObjects[i];
@@ -502,7 +500,7 @@ bool SpatialClusteringFX::PrepareInputs(const AkAudioObjects& in_objects)
         input.key = object.key;
         input.position = ClusterVec3{ position.X, position.Y, position.Z };
         input.clusterable = IsClusterable(object, buffer);
-        input.loudness = (bLoudnessWeighting && input.clusterable) ? ComputeRms(buffer) : 0.f;
+        input.loudness = input.clusterable ? ComputeRms(buffer) : 0.f;
         input.priority = static_cast<uint32_t>(Clamp(static_cast<AkInt32>(m_inputPriorities[i]), 0, PARAM_PRIORITY_MAX));
         input.group = HashCustomMetadata(object);
     }

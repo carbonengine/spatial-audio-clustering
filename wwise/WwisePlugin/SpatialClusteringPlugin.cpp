@@ -39,15 +39,13 @@ bool SpatialClusteringPlugin::GetBankParameters(const GUID& in_guidPlatform, AK:
 {
     // Write bank data here
     return in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:joinAngle"))
-        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:leaveRatio"))
+        && in_dataWriter.WriteInt32(m_propertySet.GetInt32(in_guidPlatform, "CCP:maxOutputs"))
+        && in_dataWriter.WriteInt32(m_propertySet.GetInt32(in_guidPlatform, "CCP:excludePriorityAbove"))
+        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:nearFieldRadius"))
         && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:dwellTime"))
         && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:crossfadeTime"))
-        && in_dataWriter.WriteInt32(m_propertySet.GetInt32(in_guidPlatform, "CCP:maxOutputs"))
-        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:nearFieldRadius"))
         && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:distanceWeight"))
-        && in_dataWriter.WriteInt32(m_propertySet.GetInt32(in_guidPlatform, "CCP:excludePriorityAbove"))
-        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:spreadFromSize"))
-        && in_dataWriter.WriteBool(m_propertySet.GetBool(in_guidPlatform, "CCP:loudnessWeighting"));
+        && in_dataWriter.WriteReal32(m_propertySet.GetReal32(in_guidPlatform, "CCP:spreadFromSize"));
 }
 
 AK_DEFINE_PLUGIN_CONTAINER(SpatialClustering);											// Create a PluginContainer structure that contains the info for our plugin

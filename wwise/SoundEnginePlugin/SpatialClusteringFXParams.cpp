@@ -34,19 +34,15 @@ the specific language governing permissions and limitations under the License.
 namespace
 {
     /** @brief Default values of the parameters that RTPCs can drive. */
-    const SpatialClusteringRTPCParams kDefaultRTPCParams = { 15.f, 1.5f, 200.f, 50.f, 0, 0.f, 0.f, 100, 1.f };
-
-    /** @brief Default value of the loudness weighting parameter. */
-    const bool kDefaultLoudnessWeighting = true;
+    const SpatialClusteringRTPCParams kDefaultRTPCParams = { 15.f, 0, 100, 0.f, 200.f, 50.f, 0.f, 1.f };
 
     /** @brief Returns true if every real parameter is a finite number. */
     bool AreFinite(const SpatialClusteringRTPCParams& in_params)
     {
         return std::isfinite(in_params.joinAngle)
-            && std::isfinite(in_params.leaveRatio)
+            && std::isfinite(in_params.nearFieldRadius)
             && std::isfinite(in_params.dwellTime)
             && std::isfinite(in_params.crossfadeTime)
-            && std::isfinite(in_params.nearFieldRadius)
             && std::isfinite(in_params.distanceWeight)
             && std::isfinite(in_params.spreadFromSize);
     }
@@ -77,7 +73,6 @@ namespace
 SpatialClusteringFXParams::SpatialClusteringFXParams()
     : RTPC(kDefaultRTPCParams)
 {
-    NonRTPC.loudnessWeighting = kDefaultLoudnessWeighting;
 }
 
 SpatialClusteringFXParams::~SpatialClusteringFXParams()
@@ -87,7 +82,6 @@ SpatialClusteringFXParams::~SpatialClusteringFXParams()
 SpatialClusteringFXParams::SpatialClusteringFXParams(const SpatialClusteringFXParams& in_rParams)
 {
     RTPC = in_rParams.RTPC;
-    NonRTPC = in_rParams.NonRTPC;
     m_paramChangeHandler.SetAllParamChanges();
 }
 
@@ -104,7 +98,6 @@ AKRESULT SpatialClusteringFXParams::Init(AK::IAkPluginMemAlloc* in_pAllocator, c
     {
         // Initialize default parameters here
         RTPC = kDefaultRTPCParams;
-        NonRTPC.loudnessWeighting = kDefaultLoudnessWeighting;
         m_paramChangeHandler.SetAllParamChanges();
         return AK_Success;
     }
@@ -128,22 +121,19 @@ AKRESULT SpatialClusteringFXParams::SetParamsBlock(const void* in_pParamsBlock, 
 
     SpatialClusteringRTPCParams rtpc;
     rtpc.joinAngle = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
-    rtpc.leaveRatio = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
+    rtpc.maxOutputs = READBANKDATA(AkInt32, pParamsBlock, in_ulBlockSize);
+    rtpc.excludePriorityAbove = READBANKDATA(AkInt32, pParamsBlock, in_ulBlockSize);
+    rtpc.nearFieldRadius = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
     rtpc.dwellTime = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
     rtpc.crossfadeTime = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
-    rtpc.maxOutputs = READBANKDATA(AkInt32, pParamsBlock, in_ulBlockSize);
-    rtpc.nearFieldRadius = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
     rtpc.distanceWeight = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
-    rtpc.excludePriorityAbove = READBANKDATA(AkInt32, pParamsBlock, in_ulBlockSize);
     rtpc.spreadFromSize = READBANKDATA(AkReal32, pParamsBlock, in_ulBlockSize);
-    const AkUInt8 loudnessWeighting = READBANKDATA(AkUInt8, pParamsBlock, in_ulBlockSize);
     CHECKBANKDATASIZE(in_ulBlockSize, eResult);
 
     if (!AreFinite(rtpc))
         return AK_InvalidParameter;
 
     RTPC = rtpc;
-    NonRTPC.loudnessWeighting = loudnessWeighting != 0;
     m_paramChangeHandler.SetAllParamChanges();
 
     return eResult;
@@ -160,11 +150,6 @@ AKRESULT SpatialClusteringFXParams::SetParam(AkPluginParamID in_paramID, const v
         if (!ReadReal(in_pValue, in_ulParamSize, value))
             return AK_InvalidParameter;
         RTPC.joinAngle = value;
-        break;
-    case PARAM_LEAVE_RATIO_ID:
-        if (!ReadReal(in_pValue, in_ulParamSize, value))
-            return AK_InvalidParameter;
-        RTPC.leaveRatio = value;
         break;
     case PARAM_DWELL_TIME_ID:
         if (!ReadReal(in_pValue, in_ulParamSize, value))
@@ -200,20 +185,6 @@ AKRESULT SpatialClusteringFXParams::SetParam(AkPluginParamID in_paramID, const v
         if (!ReadReal(in_pValue, in_ulParamSize, value))
             return AK_InvalidParameter;
         RTPC.spreadFromSize = value;
-        break;
-    case PARAM_LOUDNESS_WEIGHTING_ID:
-        if (in_pValue == nullptr || in_ulParamSize == 0)
-            return AK_InvalidParameter;
-        if (in_ulParamSize == sizeof(AkReal32))
-        {
-            if (!ReadReal(in_pValue, in_ulParamSize, value))
-                return AK_InvalidParameter;
-            NonRTPC.loudnessWeighting = value != 0.f;
-        }
-        else
-        {
-            NonRTPC.loudnessWeighting = *static_cast<const AkUInt8*>(in_pValue) != 0;
-        }
         break;
     default:
         return AK_InvalidParameter;
