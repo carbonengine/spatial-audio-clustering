@@ -122,7 +122,7 @@ py -3 %WWISEROOT%\Scripts\Build\Plugins\wp.py premake Authoring_Windows
 
 ## Contributing
 
-We welcome contributions: feature requests, bug fixes, documentation improvements, or new functionality. Contribution guidelines and PR templates are still being finalized as we open source the wider engine, so please bear with us while that work lands.
+Contributions are welcome. Please read the Carbon Engine [contributing guide](https://github.com/carbonengine/.github/blob/main/CONTRIBUTING.md) before opening an issue or pull request. It covers the workflow, the CLA and the pull request template, and applies to every `carbonengine` repository. Please also follow the [Code of Conduct](https://github.com/carbonengine/.github/blob/main/CODE_OF_CONDUCT.md), and report security issues privately as described in the [Security Policy](https://github.com/carbonengine/.github/blob/main/SECURITY.md) rather than in a public issue.
 
 ### Opening an Issue
 - Search existing open and closed issues before creating a new one
@@ -148,8 +148,8 @@ We don't yet ship a dedicated sample scene for spatial audio testing. That's on 
 
 ## License and Legal Notices
 
-© 2024 - present CCP ehf.
+© 2026 Fenris Creations
 
-This software was developed by CCP Games for spatial audio object clustering in EVE Online and EVE Frontier, using the Audiokinetic Wwise SDK.
+This software was developed by Fenris Creations for spatial audio object clustering in EVE Online and EVE Frontier, using the Audiokinetic Wwise SDK.
 
 This project is licensed under the [Apache License 2.0](LICENSE.txt).
