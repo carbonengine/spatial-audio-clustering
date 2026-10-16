@@ -72,6 +72,7 @@ The runtime plug-in must come from the same Wwise version as your game, since th
 
 - **Static linking**: link `SpatialClusteringFX.lib` from `SDK\x64_vc180\<Config>\lib` and include `<AK/Plugin/SpatialClusteringFXFactory.h>` in one source file.
 - **Dynamic loading**: ship `SpatialClustering.dll` from `SDK\x64_vc180\<Config>\bin` next to the executable, or in the folder set in `AkInitSettings::szPluginDLLPath`.
+- **CMake**: build the plug-in from source with your game, see [Build with CMake](#build-with-cmake). Link `SpatialClustering::SpatialClusteringFX` from `find_package(SpatialClustering CONFIG)` and include `<AK/Plugin/SpatialClusteringFXFactory.h>` in one source file.
 - **Unity and Unreal**: add the plug-in to your project's Wwise integration the way Audiokinetic describes for plug-ins, using the same files.
 
 ## Compatibility
@@ -225,6 +226,20 @@ The build copies its outputs into the Wwise install:
 - Property help: `%WWISEROOT%\Authoring\Data\Plugins\SpatialClustering\Html\`, built from `wwise\WwisePlugin\res\Md`.
 
 To also copy the runtime DLL somewhere else after each build, set `CUSTOM_WWISE_PLUGIN_DLL_PATH` for both premake and build. The DLL is then copied to `<path>\<platform>\<arch>\<toolset>\<config>\`.
+
+### Build with CMake
+
+The root `CMakeLists.txt` builds the runtime plug-in as a static library and installs it as the `SpatialClustering` CMake package, for games that build their Wwise plug-ins from source. It takes the Wwise SDK from a `Wwise` CMake package, such as the one a vcpkg port provides, or else from `WWISE_SDK_DIR`, which defaults to the `WWISESDK` environment variable. The Release configuration defines `AK_OPTIMIZED`, like the Release sound engine libraries.
+
+With `-DSPATIALCLUSTERING_BUILD_AUTHORING=ON` it also builds the authoring plug-in, on Windows only. The `Authoring` install component copies it into a Wwise install with the same layout as the Launcher, which is useful for a Wwise install kept in source control: the plug-in is built against that install's exact SDK. Use the vc170 toolset (`-T v143`), because Wwise Authoring ships the Visual Studio 2022 runtime:
+
+```
+cmake -S . -B build/authoring -G "Visual Studio 18 2026" -A x64 -T v143 -DSPATIALCLUSTERING_BUILD_AUTHORING=ON -DWWISE_SDK_DIR=<Wwise SDK folder>
+cmake --build build/authoring --config Release
+cmake --install build/authoring --config Release --component Authoring --prefix <Wwise install>
+```
+
+The install copies `SpatialClustering.dll`, `.pdb` and `.xml` to `Authoring\x64\Release\bin\Plugins`, and the property help to `Authoring\Data\Plugins\SpatialClustering\Html`. Generate the help first with `wp.py build Documentation`.
 
 ### Package a Release
 
