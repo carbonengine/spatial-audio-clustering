@@ -11,7 +11,7 @@ Spatial Clustering is a Wwise plug-in that merges audio objects that reach the l
 - **Persistent clusters**: an input stays in its cluster from frame to frame and only moves when it has been outside the cluster for a set time.
 - **Crossfaded moves**: an input that changes cluster fades out of the old cluster and into the new one, so there are no clicks or jumps.
 - **Output budget**: an optional limit on the number of outputs. When the limit is reached, the closest clusters are merged.
-- **Passthrough**: multichannel inputs (ambiences, beds) and inputs without 3D spatialization pass through with their audio and metadata unchanged.
+- **Passthrough**: inputs with more than two channels (ambiences, beds) and inputs without 3D spatialization pass through with their audio and metadata unchanged.
 - **Exclusions**: high priority inputs and inputs close to the listener can be kept out of clusters.
 - **Real-time safe**: memory comes from the Wwise plug-in allocator, and an update for 512 inputs takes about 30 to 60 µs. See [Performance](#performance).
 
@@ -19,8 +19,8 @@ Spatial Clustering is a Wwise plug-in that merges audio objects that reach the l
 
 - Large-scale battle scenes with many weapon, impact and explosion one-shots
 - Debris and particle-driven one-shots
-- Crowds of mono sources such as footsteps or voices
-- Vehicle and machinery sounds with multiple mono components
+- Crowds of sources such as footsteps or voices
+- Vehicle and machinery sounds with multiple components
 
 ## Why We Built This
 
@@ -63,7 +63,7 @@ No release for your Wwise version? [Build it from source](#building-from-source)
 
 1. Set the channel configuration of a bus to **Audio Objects**.
 2. In the bus's **Effects** tab, add the **Spatial Clustering** effect.
-3. Route the sounds you want merged to that bus. Mono sounds with 3D spatialization are clustered; everything else passes through.
+3. Route the sounds you want merged to that bus. Mono and stereo sounds with 3D spatialization are clustered; everything else passes through.
 4. Start with the default settings, then look at the clusters in the [profiler views](#profiling) and tune the [parameters](#parameters).
 
 ## Use It in Your Game
@@ -91,8 +91,9 @@ Every audio frame the plug-in reads all audio objects on its bus, updates the cl
 
 ### Inputs
 
-- An input can be clustered when it is mono, uses 3D spatialization (Position or Position + Orientation) and has Speaker Panning / 3D Spatialization Mix at 100.
-- Every other input passes through: it gets its own output with the same channel configuration, audio, positioning, custom metadata and priority. This covers stereo and multichannel ambiences, beds, 2D sounds and partly spatialized sounds.
+- An input can be clustered when it is mono or stereo, uses 3D spatialization (Position or Position + Orientation) and has Speaker Panning / 3D Spatialization Mix at 100.
+- Cluster outputs are mono. A stereo input is mixed down with each channel at -3 dB, the Wwise stereo to mono downmix, and its spread carries over to the cluster output (see [Cluster outputs](#cluster-outputs)).
+- Every other input passes through: it gets its own output with the same channel configuration, audio, positioning, custom metadata and priority. This covers inputs with more than two channels such as ambiences and beds, 2D sounds and partly spatialized sounds.
 - Inputs only share a cluster when they carry the same set of custom metadata plug-in types; a cluster output carries the custom metadata of its representative input.
 
 ### Direction from the listener
@@ -171,8 +172,8 @@ The same controls cover the whole range: a Join Angle of 180 with Max Outputs at
 ### Bus Setup
 
 - Insert the plug-in as an Effect on an Audio Objects bus (bus channel configuration set to Audio Objects). It cannot be inserted on sounds or containers and cannot be used for offline rendering.
-- Use it on busses that carry many mono one-shots that are expensive to render as objects, such as weapon fire, impacts and debris.
-- Multichannel inputs such as ambience loops always pass through untouched. If you set Max Outputs, route ambiences to another bus, since passthrough outputs count toward the limit.
+- Use it on busses that carry many one-shots that are expensive to render as objects, such as weapon fire, impacts and debris.
+- Inputs with more than two channels, such as ambience loops, always pass through untouched. If you set Max Outputs, route ambiences to another bus, since passthrough outputs count toward the limit.
 - Keep important sounds, such as dialogue or the player's own weapons, out of clusters by giving them a priority above Exclude Priority Above, or by routing them to another bus.
 - Use Near-Field Radius to keep sounds close to the listener separate.
 - Use separate busses with their own settings for different categories, for example a smaller Join Angle for dense sources (turret fire) and a larger one for spread-out sounds (shields).

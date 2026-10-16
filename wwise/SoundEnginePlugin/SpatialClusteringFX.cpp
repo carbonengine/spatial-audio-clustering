@@ -103,27 +103,47 @@ namespace
         return static_cast<AkUInt32>(in_fMilliseconds * 0.001f / in_fFrameSeconds + 0.5f);
     }
 
-    /** @brief Returns true for mono inputs that are fully spatialized in 3D. */
+    /** @brief Largest number of channels of an input that can be clustered. */
+    constexpr AkUInt32 kMaxClusterableChannels = 2;
+
+    /** @brief Returns true for mono and stereo inputs that are fully spatialized in 3D. */
     bool IsClusterable(const AkAudioObject& in_object, const AkAudioBuffer& in_buffer)
     {
         const AkBehavioralPositioningData& behavioral = in_object.positioning.behavioral;
         const Ak3DSpatializationMode spatMode = behavioral.spatMode;
-        return in_buffer.NumChannels() == 1
+        const AkUInt32 uNumChannels = in_buffer.NumChannels();
+        return uNumChannels >= 1 && uNumChannels <= kMaxClusterableChannels
             && (spatMode == AK_SpatializationMode_PositionOnly || spatMode == AK_SpatializationMode_PositionAndOrientation)
             && behavioral.panSpatMix >= 1.f;
     }
 
-    /** @brief Returns the RMS level of the first channel over the valid frames. */
+    /**
+     * @brief Returns the gain applied to each channel of an input when it is mixed down to a
+     * mono cluster output: 1 for mono and -3 dB for stereo, the Wwise stereo to mono downmix.
+     */
+    AkReal32 DownmixGain(AkUInt32 in_uNumChannels)
+    {
+        return in_uNumChannels > 1 ? 1.f / std::sqrt(static_cast<AkReal32>(in_uNumChannels)) : 1.f;
+    }
+
+    /** @brief Returns the RMS level of the mono downmix of a buffer over the valid frames. */
     AkReal32 ComputeRms(AkAudioBuffer& in_buffer)
     {
         const AkUInt32 uFrames = in_buffer.uValidFrames;
-        if (uFrames == 0)
+        const AkUInt32 uNumChannels = in_buffer.NumChannels();
+        if (uFrames == 0 || uNumChannels == 0)
             return 0.f;
 
-        const AkSampleType* pSamples = in_buffer.GetChannel(0);
+        const AkReal32 fGain = DownmixGain(uNumChannels);
         AkReal32 fSum = 0.f;
         for (AkUInt32 i = 0; i < uFrames; ++i)
-            fSum += pSamples[i] * pSamples[i];
+        {
+            AkReal32 fSample = 0.f;
+            for (AkUInt32 channel = 0; channel < uNumChannels; ++channel)
+                fSample += in_buffer.GetChannel(channel)[i];
+            fSample *= fGain;
+            fSum += fSample * fSample;
+        }
 
         const AkReal32 fRms = std::sqrt(fSum / static_cast<AkReal32>(uFrames));
         return std::isfinite(fRms) ? fRms : 0.f;
@@ -481,10 +501,10 @@ bool SpatialClusteringFX::PrepareInputs(const AkAudioObjects& in_objects)
         ClusterInput& input = m_inputs[i];
         input.key = object.key;
         input.position = ClusterVec3{ position.X, position.Y, position.Z };
-        input.loudness = (bLoudnessWeighting && buffer.NumChannels() == 1) ? ComputeRms(buffer) : 0.f;
+        input.clusterable = IsClusterable(object, buffer);
+        input.loudness = (bLoudnessWeighting && input.clusterable) ? ComputeRms(buffer) : 0.f;
         input.priority = static_cast<uint32_t>(Clamp(static_cast<AkInt32>(m_inputPriorities[i]), 0, PARAM_PRIORITY_MAX));
         input.group = HashCustomMetadata(object);
-        input.clusterable = IsClusterable(object, buffer);
     }
 
     return true;
@@ -797,7 +817,11 @@ void SpatialClusteringFX::ProcessClusters(const AkAudioObjects& in_objects)
 
         AkAudioBuffer* pOutBuffer = m_outputBuffers[uOutput];
         const AkUInt16 uFrames = AkMin(pInBuffer->uValidFrames, pOutBuffer->MaxFrames());
-        MixRamp(pInBuffer->GetChannel(0), pOutBuffer->GetChannel(0), uFrames, contribution.gainStart, contribution.gainEnd);
+        const AkUInt32 uNumChannels = pInBuffer->NumChannels();
+        const AkReal32 fDownmix = DownmixGain(uNumChannels);
+        for (AkUInt32 channel = 0; channel < uNumChannels; ++channel)
+            MixRamp(pInBuffer->GetChannel(channel), pOutBuffer->GetChannel(0), uFrames,
+                contribution.gainStart * fDownmix, contribution.gainEnd * fDownmix);
         if (uFrames > m_clusterValidFrames[contribution.cluster])
             m_clusterValidFrames[contribution.cluster] = uFrames;
         if (pInBuffer->eState != AK_NoMoreData)
