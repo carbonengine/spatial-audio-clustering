@@ -44,7 +44,7 @@ for the documentation about the plugin xml format
       <!-- Largest angle from the listener between an input and a cluster for the input to join the cluster. -->
       <Property Name="CCP:joinAngle" DocId="joinAngle" Type="Real32" SupportRTPCType="Exclusive" DisplayName="Join Angle (degrees)">
         <UserInterface Step="0.5" Fine="0.1" Decimals="1" />
-        <DefaultValue>5</DefaultValue>
+        <DefaultValue>15</DefaultValue>
         <AudioEnginePropertyID>0</AudioEnginePropertyID>
         <Restrictions>
           <ValueRestriction>

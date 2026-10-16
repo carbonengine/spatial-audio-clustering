@@ -152,7 +152,7 @@ All parameters except Loudness Weighting can be driven by RTPCs. The same descri
 
 | Parameter | Range | Default | Description |
 |---|---|---|---|
-| Join Angle (degrees) | 0 to 180 | 5 | Largest angle between an input and a cluster for the input to join it. 0 turns off merging by angle. |
+| Join Angle (degrees) | 0 to 180 | 15 | Largest angle between an input and a cluster for the input to join it. 0 turns off merging by angle. |
 | Leave Ratio (x Join Angle) | 1 to 4 | 1.5 | Angle at which an input starts to leave its cluster, as a multiple of the Join Angle. |
 | Dwell Time (ms) | 0 to 5000 | 200 | Time an input must stay outside its cluster before it leaves, and time two clusters must stay close before they merge. |
 | Crossfade Time (ms) | 0 to 1000 | 50 | Time over which a moving input fades between clusters. |

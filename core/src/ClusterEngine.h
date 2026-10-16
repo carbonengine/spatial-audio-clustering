@@ -50,7 +50,7 @@ public:
 /** @brief Settings for one cluster engine update. */
 struct ClusterParams
 {
-    float joinAngle = 5.f;               ///< Angle in degrees under which an input may join a cluster.
+    float joinAngle = 15.f;              ///< Angle in degrees under which an input may join a cluster.
     float leaveRatio = 1.5f;             ///< Leave angle as a multiple of the join angle.
     uint32_t dwellFrames = 10;           ///< Frames a change must last before an input leaves its cluster or two clusters merge.
     uint32_t crossfadeFrames = 3;        ///< Frames over which a moving input fades between clusters.

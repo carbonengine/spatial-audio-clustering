@@ -698,7 +698,9 @@ ProbeResult RunJoinProbe(TestContext& io_context, const ClusterParams& in_settle
 
 void TestJoinsWithinJoinAngle(TestContext& io_context)
 {
-    const ClusterParams params;
+    // The probes below are laid out around a 5 degree join angle.
+    ClusterParams params;
+    params.joinAngle = 5.f;
     ClusterParams budget = params;
     budget.maxOutputs = 1;
     ClusterParams distance = params;
@@ -1316,6 +1318,7 @@ void TestCrossfadeRamp(TestContext& io_context)
     for (uint32_t fade : {4u, 1u, 0u})
     {
         ClusterParams params;
+        params.joinAngle = 5.f;
         params.dwellFrames = 4;
         params.crossfadeFrames = fade;
         TestEngine engine(64, &io_context, "crossfade");
@@ -1626,6 +1629,7 @@ void TestCentredInputsShare(TestContext& io_context)
 void TestBudgetFarInputGetsOwnCluster(TestContext& io_context)
 {
     ClusterParams params;
+    params.joinAngle = 5.f;
     params.maxOutputs = 3;
     TestEngine engine(64, &io_context, "budget-far");
     std::vector<ClusterInput> inputs = {MakeInput(1, 0.0, 10.0), MakeInput(2, 6.0, 10.0), MakeInput(3, 12.0, 10.0)};

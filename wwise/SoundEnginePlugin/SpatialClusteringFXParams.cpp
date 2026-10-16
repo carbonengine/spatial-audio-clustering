@@ -34,7 +34,7 @@ the specific language governing permissions and limitations under the License.
 namespace
 {
     /** @brief Default values of the parameters that RTPCs can drive. */
-    const SpatialClusteringRTPCParams kDefaultRTPCParams = { 5.f, 1.5f, 200.f, 50.f, 0, 0.f, 0.f, 100, 1.f };
+    const SpatialClusteringRTPCParams kDefaultRTPCParams = { 15.f, 1.5f, 200.f, 50.f, 0, 0.f, 0.f, 100, 1.f };
 
     /** @brief Default value of the loudness weighting parameter. */
     const bool kDefaultLoudnessWeighting = true;
