@@ -145,7 +145,7 @@ Inputs with a priority above **Exclude Priority Above**, and inputs closer to th
 
 ### Performance
 
-Memory comes from the Wwise plug-in allocator. It is reserved for 64 inputs in Init and grows only when more inputs arrive. An update for 512 inputs takes about 30 to 60 µs. Lowering Max Outputs far below the current number of clusters merges them all in one update, which takes about 0.7 to 1.4 ms for 512 inputs and 1.5 to 3.5 ms for 1024 inputs.
+Memory comes from the Wwise plug-in allocator. It is reserved for 64 inputs in Init and grows only when more inputs arrive. An update for 512 inputs takes about 30 to 60 µs in the [benchmark](#testing-without-a-game). Lowering Max Outputs far below the current number of clusters merges them all in one update, which takes about 0.7 to 1.4 ms for 512 inputs and 1.5 to 3.5 ms for 1024 inputs in the same benchmark.
 
 ## Parameters
 
@@ -252,6 +252,33 @@ python scripts\package.py
 It writes `dist\SpatialClustering_<version>_Wwise<year>.<major>\` with the bundle and the license files, and a zip of that folder for the GitHub release. `--skip-build` packages what is already built.
 
 The plug-in version is set in `wwise/SpatialClusteringVersion.h`. The bundle version puts the Wwise version first and the plug-in version last, because the Launcher reads the first two numbers as the Wwise version the bundle is for: plug-in 3.0.0 built against Wwise 2025.1 becomes bundle version 2025.1.300.0.
+
+### Testing Without a Game
+
+The `core/tests` folder builds a standalone program around `ClusterEngine`. It does not need the Wwise SDK. It contains an assertion test suite, 13 seeded scenarios (static groups, crossing groups, one-shots, jitter, budget changes, near field, passthrough, a space battle and more) and a benchmark, which also times an update that lowers Max Outputs.
+
+```
+cmake -S core/tests -B build/tests
+cmake --build build/tests --config Release
+cd build/tests
+ctest -C Release
+Release\cluster_tests bench
+Release\cluster_tests list
+Release\cluster_tests scenario oneshots --csv oneshots.csv
+```
+
+Run `cluster_tests` with no arguments to see all modes and options. On Linux and macOS the program is in `build/tests` instead of `build/tests/Release`.
+
+#### Watching a Scenario
+
+`--trace` writes every frame of a scenario to a JSON file, which `core/tests/viewer.html` plays back in a browser. Open the viewer and drop the trace on it.
+
+```
+Release\cluster_tests scenario battle --trace battle.json
+Release\cluster_tests scenario battle --seed 42 --join-angle 10 --max-outputs 12 --trace battle.json
+```
+
+The viewer shows the scene from above twice, side by side: without clustering, where every voice needs its own audio object, and with Spatial Clustering. It counts the objects in both against an endpoint limit (128 by default, editable on the page), marks the voices that would fall back to the main mix without clustering, and sums up the peak, average and saving over the whole run. `--seed` picks a different random scene, and `--join-angle` and `--max-outputs` override the scenario's settings. Adding `#t=3.2` to the viewer's address opens it paused at that time.
 
 ### Testing in a Game
 

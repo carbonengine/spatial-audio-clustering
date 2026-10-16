@@ -2,6 +2,8 @@
 
 
 **Testing**
+- [ ] The tests in `core/tests` pass (`ctest -C Release`).
+- [ ] If `ClusterEngine` changed: benchmark results before and after (`cluster_tests bench`).
 - [ ] The plug-in builds and was tested at runtime in Wwise or a game.
 
 **Docs**
