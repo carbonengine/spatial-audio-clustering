@@ -1,4 +1,4 @@
-# Copyright 2026 CCP ehf.
+# Copyright 2026 Fenris Creations
 #
 # Licensed under the Apache License, Version 2.0. See LICENSE.txt in the repository root.
 

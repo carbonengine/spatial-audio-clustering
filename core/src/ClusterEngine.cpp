@@ -1,8 +1,5 @@
 /*
- * Copyright 2026 CCP ehf.
- *
- * This software was developed by CCP Games for spatial audio object clustering
- * in EVE Online and EVE Frontier.
+ * Copyright 2026 Fenris Creations
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +12,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * This license does not grant any rights to CCP's trademarks or game content.
- * EVE Online and EVE Frontier are registered trademarks of CCP ehf.
  */
 
 #include "ClusterEngine.h"
